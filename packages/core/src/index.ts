@@ -1,5 +1,22 @@
 // Net — Transport layer
 
+// Identity — signature & verification
+export type {
+  ExportedKeyPair,
+  KeyPair,
+  SignedEnvelope,
+  VerificationFailureHandler,
+} from "./identity/index.js";
+export {
+  exportKeyPair,
+  generateKeyPair,
+  importKeyPair,
+  importPublicKey,
+  SignatureVerificationError,
+  SignedTransport,
+  sign,
+  verify,
+} from "./identity/index.js";
 export {
   DataChannelNotOpenError,
   IceGatheringTimeoutError,
