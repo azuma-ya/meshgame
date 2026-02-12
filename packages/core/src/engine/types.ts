@@ -31,7 +31,7 @@ export interface Meta {
 export interface Action<P = unknown> {
   /** verification/action type identifier */
   type: string;
-  payload: P;
+  payload?: P;
   /** Optional metadata specific to the action instance (e.g., signature) */
   meta?: Record<string, unknown>;
 }

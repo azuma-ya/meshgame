@@ -4,7 +4,7 @@ import type { Meta, Result, State } from "./types.js";
  * Minimal interface required by GameNode to interact with ANY Engine.
  * This is the same interface that `GameNode` expects.
  */
-export interface EngineAdapter<S = State, A = unknown> {
+export interface EngineAdapter<S = State, A = unknown, O = unknown> {
   initialState: S;
   decodeAction: (payload: unknown) => A;
   reduce: (state: S, action: A, meta: Meta) => S;
@@ -15,7 +15,7 @@ export interface EngineAdapter<S = State, A = unknown> {
  * This is what `BaseEngine` will implement.
  */
 export interface EngineFacade<S = State, A = unknown, O = unknown>
-  extends EngineAdapter<S, A> {
+  extends EngineAdapter<S, A, O> {
   /**
    * Check if an action is valid without applying it.
    */

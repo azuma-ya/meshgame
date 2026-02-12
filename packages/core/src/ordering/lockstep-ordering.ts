@@ -1,34 +1,28 @@
-import type { ActionCommit, ActionLog } from "../log/types.js";
+import type { Commit } from "../log/types.js";
 import type { Membership } from "../membership/types.js";
-import {
-  ActionCommitMessage,
-  ActionProposeMessage,
-  type NodeMessage,
-} from "../protocol/types.js";
+import type { PeerEvent, Transport } from "../net/transport.js";
+import { decodeMessage, encodeMessage } from "../protocol/codec.js";
+import type { NodeMessage } from "../protocol/types.js";
 import { getCurrentTick, getTickDeadline } from "../time/tick.js";
-import type { Ordering, OrderingOutput } from "./types.js";
+import type { Ordering } from "./types.js";
 
 /**
  * Hostless Lockstep Ordering.
  *
- * - No central host.
- * - Time is divided into ticks.
- * - Deadline = t0 + (tick + 1) * tickMs.
- * - Peers broadcast ACTION_PROPOSE for a specific tick.
- * - On deadline, every peer deterministically finalizes the tick:
- *   - Gathers all proposals for that tick.
- *   - Fills missing peers with null (NOOP).
- *   - Sorts via peerId.
- *   - Appends block to log.
+ * - Encapsulates Transport.
+ * - Manages message handling internally.
+ * - Emits committed blocks via onCommit callback.
  */
 export class HostlessLockstepOrdering implements Ordering {
   private readonly buffer = new Map<number, Map<string, unknown>>();
   private currentTick = -1;
   private committedHeight = 0;
+  private commitCallbacks: ((commit: Commit) => void)[] = [];
+  private peerCallbacks: ((ev: PeerEvent) => void)[] = [];
 
   constructor(
+    private readonly transport: Transport,
     private readonly membership: Membership,
-    private readonly log: ActionLog,
     private readonly config: {
       t0Ms: number;
       tickMs: number;
@@ -37,20 +31,67 @@ export class HostlessLockstepOrdering implements Ordering {
     },
   ) {}
 
-  getHeight(): number {
-    return this.committedHeight;
+  async start(): Promise<void> {
+    this.transport.onMessage((from, tMsg) => {
+      if (tMsg.topic === "protocol") {
+        try {
+          const msg = decodeMessage(tMsg.payload);
+          this.handleMessage(from, msg);
+        } catch (e) {
+          console.warn("Invalid protocol message", e);
+        }
+      }
+    });
+
+    this.transport.onPeerEvent((ev) => {
+      if (ev.type === "peer_connected") {
+        this.membership.addPeer({
+          peerId: ev.peerId,
+          role: "peer",
+          joinedAt: Date.now(),
+        });
+      } else if (ev.type === "peer_disconnected") {
+        this.membership.removePeer(ev.peerId);
+      }
+      for (const cb of this.peerCallbacks) cb(ev);
+    });
+
+    await this.transport.start();
+
+    // Sync currentTick to now to avoid replaying from t0 if t0 is in the past
+    const liveTick = getCurrentTick(
+      Date.now(),
+      this.config.t0Ms,
+      this.config.tickMs,
+    );
+    this.currentTick = liveTick - 1;
+    console.log(`[Lockstep] Started at tick ${this.currentTick}`);
   }
 
-  handleMessage(fromPeerId: string, msg: NodeMessage): boolean {
+  async stop(): Promise<void> {
+    await this.transport.stop();
+  }
+
+  onCommit(callback: (commit: Commit) => void): void {
+    this.commitCallbacks.push(callback);
+  }
+
+  onPeerEvent(callback: (ev: PeerEvent) => void): void {
+    this.peerCallbacks.push(callback);
+  }
+
+  getPeers(): string[] {
+    return this.membership.getPeers().map((p) => p.peerId);
+  }
+
+  private handleMessage(fromPeerId: string, msg: NodeMessage) {
     switch (msg.type) {
       case "ACTION_PROPOSE": {
-        if (msg.roomId !== this.config.roomId) return false;
+        if (msg.roomId !== this.config.roomId) return;
 
         // Too late?
         if (msg.tick <= this.currentTick) {
-          // In a real system we might log this as a "too late" drop
-          // console.warn(`Dropped late proposal from ${fromPeerId} for tick ${msg.tick}`);
-          return true;
+          return;
         }
 
         let tickBuffer = this.buffer.get(msg.tick);
@@ -59,20 +100,26 @@ export class HostlessLockstepOrdering implements Ordering {
           this.buffer.set(msg.tick, tickBuffer);
         }
 
-        // Single action per tick per peer for MVP simple lockstep
         if (!tickBuffer.has(fromPeerId)) {
           tickBuffer.set(fromPeerId, msg.payload);
         }
-        return true;
+        break;
       }
       case "ACTION_COMMIT": {
-        // In hostless mode, we generate commits locally.
-        // Receiving a commit is purely for verification/gossip.
-        // For MVP, we ignore incoming commits or just check them loosely.
-        return true;
+        // Validation / Gossip could happen here
+        break;
       }
-      default:
-        return false;
+      case "JOIN": {
+        // Handle JOIN explicitly if passed down?
+        // Actually, we use implicit join via transport event for now in `start()`
+        // But if `JOIN` message carries more info, we process it here.
+        this.membership.addPeer({
+          peerId: fromPeerId,
+          role: "peer",
+          joinedAt: Date.now(),
+        });
+        break;
+      }
     }
   }
 
@@ -84,49 +131,48 @@ export class HostlessLockstepOrdering implements Ordering {
     );
     const targetTick = liveTick + this.config.inputDelayTicks;
 
-    // Store local action directly in buffer (optimistic)
+    // 1. Buffer locally
     let tickBuffer = this.buffer.get(targetTick);
     if (!tickBuffer) {
       tickBuffer = new Map();
       this.buffer.set(targetTick, tickBuffer);
     }
     tickBuffer.set(this.membership.self.peerId, payload);
+
+    // 2. Broadcast Proposal
+    const msg: NodeMessage = {
+      type: "ACTION_PROPOSE",
+      roomId: this.config.roomId,
+      peerId: this.membership.self.peerId,
+      tick: targetTick,
+      payload: payload,
+    };
+    this.broadcast(msg);
   }
 
-  /**
-   * Advance time.
-   * If a tick's deadline has passed, finalize it.
-   */
-  tick(nowMs: number): OrderingOutput {
+  tick(nowMs: number): void {
     const liveTick = getCurrentTick(
       nowMs,
       this.config.t0Ms,
       this.config.tickMs,
     );
-    const output: OrderingOutput = { outbound: [], commits: [] };
 
-    if (liveTick < 0) return output; // Not started
-
-    // If this is the first time we see this tick, maybe we need to broadcast our local action?
-    // Actually, onLocalAction is called by the UI.
-    // But we need to ensure we broadcast our proposal for the target tick.
-    // For MVP, `onLocalAction` puts it in buffer. We need to broadcast it NOW.
-    // Wait, `onLocalAction` should return the outbound message or queue it.
-    // Let's change onLocalAction behavior or queue logic.
-    //
-    // Revised approach:
-    // `onLocalAction` is called when user inputs. We immediately queue an ACTION_PROPOSE.
-    // But `tick()` returns `outbound`.
-    // We need an internal outbound queue.
-
-    // Check for tickers we need to finalize.
-    // We finalize ticks strictly in order: currentTick + 1, currentTick + 2, ...
-    // as long as their deadline has passed.
+    if (liveTick < 0) return;
 
     let nextTick = this.currentTick + 1;
+    let processedCount = 0;
+    const MAX_TICKS_PER_FRAME = 100;
 
-    // We can finalize `nextTick` if `nowMs >= deadline(nextTick)`
+    // Check deadlines
     while (true) {
+      // Safety break
+      if (processedCount++ > MAX_TICKS_PER_FRAME) {
+        console.warn(
+          "LockstepOrdering: Exceeded max ticks per frame, skipping catchup",
+        );
+        break;
+      }
+
       const deadline = getTickDeadline(
         nextTick,
         this.config.t0Ms,
@@ -134,22 +180,54 @@ export class HostlessLockstepOrdering implements Ordering {
       );
       if (nowMs >= deadline) {
         // Finalize this tick
-        const commit = this.finalizeTick(nextTick);
-        output.commits.push(commit);
+        const peers = this.membership.getPeers();
+        // Deterministic sort
+        peers.sort((a, b) => a.peerId.localeCompare(b.peerId));
+        const tickBuffer = this.buffer.get(nextTick);
 
-        // Also broadcast the commit (gossip/validation) - optional but requested
-        output.outbound.push({
+        const actionsByPeer: Array<{
+          peerId: string;
+          payload: unknown | null;
+        }> = [];
+
+        for (const p of peers) {
+          const payload = tickBuffer?.get(p.peerId) ?? null;
+          actionsByPeer.push({ peerId: p.peerId, payload });
+
+          if (payload !== null) {
+            this.committedHeight++;
+            const commit: Commit = {
+              seq: this.committedHeight,
+              action: {
+                peerId: p.peerId,
+                payload: payload,
+              },
+              metadata: {
+                tick: nextTick,
+              },
+            };
+
+            // Emit individual commit
+            for (const cb of this.commitCallbacks) {
+              try {
+                cb(commit);
+              } catch (e) {
+                console.error(e);
+              }
+            }
+          }
+        }
+
+        // Broadcast gossip (Still batch for efficiency, but height is now a running sequence)
+        this.broadcast({
           type: "ACTION_COMMIT",
           roomId: this.config.roomId,
           tick: nextTick,
-          height: commit.height,
-          actionsByPeer: commit.actionsByPeer,
+          height: this.committedHeight,
+          actionsByPeer,
         });
 
         this.currentTick = nextTick;
-        this.committedHeight++;
-
-        // Cleanup buffer
         this.buffer.delete(nextTick);
 
         nextTick++;
@@ -157,75 +235,15 @@ export class HostlessLockstepOrdering implements Ordering {
         break;
       }
     }
-
-    // Flush local proposals that are pending broadcast?
-    // In this definition `tick()` is the only place returning outbound.
-    // So we need to store "pending proposals" from `onLocalAction`.
-    // Let's modify: `onLocalAction` will store to a separate "localPending" list
-    // OR we iterate the buffer for "future" ticks that contain "self" and haven't been sent?
-    // Simplest: `onLocalAction` doesn't return anything, but `tick()` collects them?
-    // No, `tick` might be called rarely. `onLocalAction` might want immediate feedback?
-    // The interface `Ordering` defines `onLocalAction` as void.
-    // Let's add a "pendingOutbound" queue to the class.
-
-    if (this._pendingOutbound.length > 0) {
-      output.outbound.push(...this._pendingOutbound);
-      this._pendingOutbound = [];
-    }
-
-    return output;
   }
 
-  private _pendingOutbound: NodeMessage[] = [];
-
-  // Overriding onLocalAction to capture the broadcast requirement
-  // We need to re-implement the method signature from the interface properly
-  // Since I can't effectively change the logic inside `tick` dynamically for the method,
-  // I'll update the method here.
-
-  // Re-declare for clarity in logic flow (it was defined above but logic is split)
-  // The method above in the class body is:
-  /*
-  onLocalAction(payload: unknown, nowMs: number): void {
-      const liveTick = getCurrentTick(nowMs, this.config.t0Ms, this.config.tickMs);
-      const targetTick = liveTick + this.config.inputDelayTicks;
-      
-      // 1. Buffer locally
-      let tickBuffer = this.buffer.get(targetTick);
-      if (!tickBuffer) {
-          tickBuffer = new Map();
-          this.buffer.set(targetTick, tickBuffer);
-      }
-      tickBuffer.set(this.membership.self.peerId, payload);
-      
-      // 2. Queue broadcast
-      this._pendingOutbound.push({
-          type: "ACTION_PROPOSE",
-          roomId: this.config.roomId,
-          peerId: this.membership.self.peerId,
-          tick: targetTick,
-          payload: payload
-      });
-  }
-  */
-  // I will overwrite the previous method in the actual file content below.
-
-  private finalizeTick(tick: number): ActionCommit {
-    const tickBuffer = this.buffer.get(tick);
-    const peers = this.membership.getPeers();
-
-    // Deterministic sort
-    peers.sort((a, b) => a.peerId.localeCompare(b.peerId));
-
-    const actionsByPeer = peers.map((p) => ({
-      peerId: p.peerId,
-      payload: tickBuffer?.get(p.peerId) ?? null, // NOOP if missing
-    }));
-
-    return {
-      height: this.committedHeight + 1,
-      tick: tick,
-      actionsByPeer,
-    };
+  private broadcast(msg: NodeMessage) {
+    const encoded = encodeMessage(msg);
+    this.transport
+      .broadcast({
+        topic: "protocol",
+        payload: encoded,
+      })
+      .catch((e) => console.error("Broadcast failed", e));
   }
 }

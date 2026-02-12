@@ -1,22 +1,19 @@
-import type { ActionCommit, ActionLog } from "./types.js";
+import type { ActionLog, Commit } from "./types.js";
 
 export class MemoryLogStore implements ActionLog {
-  private commits: ActionCommit[] = [];
+  private commits: Commit[] = [];
 
-  async append(commit: ActionCommit): Promise<void> {
-    const expectedHeight = this.latestHeight() + 1;
-    if (commit.height !== expectedHeight) {
+  async append(commit: Commit): Promise<void> {
+    const expectedSeq = (await this.latestHeight()) + 1;
+    if (commit.seq !== expectedSeq) {
       throw new Error(
-        `MemoryLogStore: Height mismatch. Expected ${expectedHeight}, got ${commit.height}`,
+        `MemoryLogStore: Sequence mismatch. Expected ${expectedSeq}, got ${commit.seq}`,
       );
     }
     this.commits.push(commit);
   }
 
-  async getRange(
-    fromHeight: number,
-    toHeight: number,
-  ): Promise<ActionCommit[]> {
+  async getRange(fromHeight: number, toHeight: number): Promise<Commit[]> {
     const startIndex = Math.max(0, fromHeight - 1);
     const endIndex = Math.min(this.commits.length, toHeight);
 
@@ -26,7 +23,11 @@ export class MemoryLogStore implements ActionLog {
     return this.commits.slice(startIndex, endIndex);
   }
 
-  latestHeight(): number {
+  async latestHeight(): Promise<number> {
     return this.commits.length;
+  }
+
+  async clear(): Promise<void> {
+    this.commits = [];
   }
 }

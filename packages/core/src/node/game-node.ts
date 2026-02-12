@@ -1,190 +1,122 @@
-import type { EngineAdapter } from "../engine/index.js";
-import { type ActionLog, MemoryLogStore } from "../log/index.js";
-import {
-  BasicMembership,
-  type Membership,
-  type NodeRole,
-  type PeerInfo,
-} from "../membership/index.js";
-import type { Transport } from "../net/transport.js";
-import { HostlessLockstepOrdering, type Ordering } from "../ordering/index.js";
-import { decodeMessage, encodeMessage } from "../protocol/codec.js";
-import type { NodeMessage } from "../protocol/types.js";
+import type { EngineFacade } from "../engine/adapter.js";
+import { MemoryLogStore } from "../log/memory-log-store.js";
+import type { ActionLog, Commit } from "../log/types.js";
+import type { PeerEvent } from "../net/transport.js";
+import type { Ordering } from "../ordering/index.js";
 
-export interface GameNodeOptions {
-  transport: Transport;
-  initialRole?: NodeRole;
-  config: {
-    t0Ms?: number; // Optional: If starting fresh, defaults to now. If joining, overridden.
-    tickMs: number;
-    inputDelayTicks: number;
-    roomId: string;
-  };
+export interface GameNodeOptions<O> {
+  ordering: Ordering;
+  log?: ActionLog;
+  playerId: string;
 }
 
 /**
- * GameNode Facade.
- * Binds Transport, Membership, Log, and Lockstep Ordering.
+ * GameNode is the main entry point for a game instance on a single node.
+ * It manages the lifecycle of the game, including synchronization, state updates, and logging.
+ *
+ * @template S - Global Game State type
+ * @template A - Action type
+ * @template O - Observable View type (what a specific player sees)
  */
-export class GameNode<S, A> {
-  readonly transport: Transport;
-  readonly membership: Membership;
-  readonly log: ActionLog;
-  readonly ordering: Ordering;
-
+export class GameNode<S, A, O = unknown> {
   private state: S;
-  private engine: EngineAdapter<S, A>;
-  private tickerInterval: ReturnType<typeof setInterval> | undefined; // Node/Browser timer
+  private ordering: Ordering;
+  private log: ActionLog;
+  private engine: EngineFacade<S, A, O>;
+  private tickerInterval: ReturnType<typeof setInterval> | undefined;
+  private commitQueue: Promise<void> = Promise.resolve();
+  private playerId: string;
+  private subscribers: Record<string, (view: O) => void> = {};
 
-  constructor(opts: GameNodeOptions, engine: EngineAdapter<S, A>) {
-    this.transport = opts.transport;
+  constructor(opts: GameNodeOptions<O>, engine: EngineFacade<S, A, O>) {
+    this.ordering = opts.ordering;
     this.engine = engine;
     this.state = engine.initialState;
+    this.log = opts.log ?? new MemoryLogStore();
+    this.playerId = opts.playerId;
 
-    // Initialize components
-    const selfInfo: PeerInfo = {
-      peerId: this.transport.self,
-      role: opts.initialRole || "peer",
-      joinedAt: Date.now(),
-    };
-
-    this.membership = new BasicMembership(selfInfo);
-    this.log = new MemoryLogStore();
-
-    // Config defaults
-    const orderingConfig = {
-      t0Ms: opts.config.t0Ms ?? Date.now(),
-      tickMs: opts.config.tickMs,
-      inputDelayTicks: opts.config.inputDelayTicks,
-      roomId: opts.config.roomId,
-    };
-
-    this.ordering = new HostlessLockstepOrdering(
-      this.membership,
-      this.log,
-      orderingConfig,
-    );
+    // Initial update will happen when onUpdate is called or via notifyUpdate
 
     // Bind handlers
-    this.transport.onMessage((from, msg) =>
-      this.handleTransportMessage(from, msg),
-    );
-    this.transport.onPeerEvent((ev) => {
-      if (ev.type === "peer_connected") {
-        // For MVP, simplistic handling.
-        // In real app, we wait for Hello/Join to add to membership with role.
-        // But lockstep ordering needs them in membership to sort commits.
-        this.membership.addPeer({
-          peerId: ev.peerId,
-          role: "peer",
-          joinedAt: Date.now(),
-        });
-      } else if (ev.type === "peer_disconnected") {
-        this.membership.removePeer(ev.peerId);
-      }
+    this.ordering.onCommit((commit) => {
+      this.commitQueue = this.commitQueue.then(async () => {
+        // 1. Append to Log (The history)
+        try {
+          await this.log.append(commit);
+
+          // 2. Apply to Engine (The current state)
+          const action = this.engine.decodeAction(commit.action.payload);
+          this.state = this.engine.reduce(this.state, action, {
+            from: commit.action.peerId,
+            height: commit.seq,
+            tick: commit.metadata?.tick ?? 0,
+          });
+
+          this.notifySubscribers();
+        } catch (e) {
+          console.error("Failed to process commit", e, commit);
+        }
+      });
     });
   }
 
   async start(): Promise<void> {
-    await this.transport.start();
+    await this.ordering.start();
 
     // Start Ticker
-    // MVP: simple interval. For high precision, use requestAnimationFrame or recursive setTimeout with drift correction.
     this.tickerInterval = setInterval(() => {
       this.advanceTick();
-    }, 16); // Check every ~frame, though ordering.tick() handles the actual logic logic
+    }, 16);
   }
 
   async stop(): Promise<void> {
-    clearInterval(this.tickerInterval);
-    await this.transport.stop();
+    if (this.tickerInterval) {
+      clearInterval(this.tickerInterval);
+      this.tickerInterval = undefined;
+    }
+    await this.ordering.stop();
   }
 
-  /**
-   * Submit an action to the network.
-   */
-  submit(action: A): void {
+  onPeerEvent(callback: (ev: PeerEvent) => void): void {
+    this.ordering.onPeerEvent(callback);
+  }
+
+  subscribe(fn: (view: O) => void) {
+    const id = Object.keys(this.subscribers).length;
+    this.subscribers[id] = fn;
+
+    // Trigger immediate update with current internal state
+    fn(this.getView(this.playerId));
+
+    // Return a handle that allows the caller to unsubscribe.
+    return () => {
+      delete this.subscribers[id];
+    };
+  }
+
+  getPeers(): string[] {
+    return this.ordering.getPeers();
+  }
+
+  submit(action: A) {
     this.ordering.onLocalAction(action, Date.now());
-    // Force immediate tick check to flush outbound if needed
     this.advanceTick();
   }
 
-  getState(): S {
-    return this.state;
+  /**
+   * Returns a filtered view of the state for a specific player.
+   */
+  getView(playerId: string): O {
+    return this.engine.observe(this.state, playerId);
   }
 
-  getHeight(): number {
-    return this.ordering.getHeight();
+  private notifySubscribers() {
+    for (const fn of Object.values(this.subscribers)) {
+      fn(this.getView(this.playerId));
+    }
   }
 
   private advanceTick() {
-    const output = this.ordering.tick(Date.now());
-
-    // 1. Flush Outbound
-    for (const msg of output.outbound) {
-      const encoded = encodeMessage(msg);
-      // Broadcast to everyone (gossip)
-      // Note: In a real optimized system we might multicast or use tree
-      this.transport
-        .broadcast({
-          topic: "protocol",
-          payload: encoded,
-        })
-        .catch((e) => console.error("Broadcast failed", e));
-    }
-
-    // 2. Apply Commits
-    for (const commit of output.commits) {
-      // Commit contains a block of actions.
-      // We must apply them in deterministic order (already sorted by ordering).
-
-      for (const peerAction of commit.actionsByPeer) {
-        if (peerAction.payload === null) continue; // NOOP
-
-        try {
-          const action = this.engine.decodeAction(peerAction.payload);
-          this.state = this.engine.reduce(this.state, action, {
-            from: peerAction.peerId,
-            height: commit.height,
-            tick: commit.tick,
-          });
-        } catch (e) {
-          console.error("Failed to reduce action", e);
-        }
-      }
-    }
-  }
-
-  private async handleTransportMessage(
-    from: string,
-    tMsg: { topic: string; payload: Uint8Array },
-  ) {
-    if (tMsg.topic === "protocol") {
-      try {
-        const msg = decodeMessage(tMsg.payload);
-        const handled = this.ordering.handleMessage(from, msg);
-        // Ordering handles PROPOSE.
-        // We might need to handle JOIN/WELCOME here if not in ordering.
-        if (!handled) {
-          this.handleManagementMessage(from, msg);
-        }
-      } catch (e) {
-        console.warn("Invalid protocol message", e);
-      }
-    }
-  }
-
-  private handleManagementMessage(from: string, msg: NodeMessage) {
-    if (msg.type === "JOIN") {
-      // If I was a host I would welcome. But we are hostless.
-      // Everyone can welcome or we just use it to track peers.
-      this.membership.addPeer({
-        peerId: from,
-        role: "peer",
-        joinedAt: Date.now(),
-      });
-    }
-    // TODO: Implement full Join/Welcome flow for t0 sync.
-    // For MVP we assume config is shared or we assume t0 is fixed.
+    this.ordering.tick(Date.now());
   }
 }

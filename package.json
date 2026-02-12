@@ -9,7 +9,9 @@
     "examples:02_ws_signaling": "pnpm --filter 02_ws_signaling dev",
     "examples:03_pusher_signaling": "pnpm --filter 03_pusher_signaling dev",
     "examples:04_firebase_signaling": "pnpm --filter 04_firebase_signaling dev",
-    "examples:05_identity_chat": "pnpm --filter 05_identity_chat dev"
+    "examples:05_identity_chat": "pnpm --filter 05_identity_chat dev",
+    "examples:06_turn_based_game": "pnpm --filter 06_turn_based_game dev",
+    "examples:07_secret_target_game": "pnpm --filter 07_secret_target_game dev"
   },
   "author": "azuma-ya",
   "packageManager": "pnpm@10.6.3",

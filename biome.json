@@ -19,6 +19,9 @@
       "a11y": {
         "useButtonType": "off",
         "noLabelWithoutControl": "off"
+      },
+      "suspicious": {
+        "noEmptyInterface": "off"
       }
     }
   },

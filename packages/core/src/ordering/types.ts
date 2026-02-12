@@ -1,25 +1,34 @@
 /**
  * Ordering Layer Types
  */
-import type { ActionCommit } from "../log/types.js";
-import { Envelope, type NodeMessage } from "../protocol/types.js";
-
-/**
- * Result of a tick processing.
- */
-export interface OrderingOutput {
-  /** Messages to broadcast/send. */
-  outbound: NodeMessage[];
-  /** New commits to apply to state. */
-  commits: ActionCommit[];
-}
+import type { Commit } from "../log/types.js";
+import type { PeerEvent } from "../net/transport.js";
 
 export interface Ordering {
   /**
-   * Handle an incoming protocol message.
-   * Returns true if handled.
+   * Start the ordering service (and underlying transport).
    */
-  handleMessage(fromPeerId: string, msg: NodeMessage): boolean;
+  start(): Promise<void>;
+
+  /**
+   * Stop the ordering service.
+   */
+  stop(): Promise<void>;
+
+  /**
+   * Subscribe to commit events.
+   */
+  onCommit(callback: (commit: Commit) => void): void;
+
+  /**
+   * Subscribe to peer events.
+   */
+  onPeerEvent(callback: (ev: PeerEvent) => void): void;
+
+  /**
+   * Get connected peer IDs.
+   */
+  getPeers(): string[];
 
   /**
    * Submit a local action for the current time.
@@ -29,10 +38,5 @@ export interface Ordering {
   /**
    * Advance time and generate outputs.
    */
-  tick(nowMs: number): OrderingOutput;
-
-  /**
-   * Get the current highest committed height.
-   */
-  getHeight(): number;
+  tick(nowMs: number): void;
 }
