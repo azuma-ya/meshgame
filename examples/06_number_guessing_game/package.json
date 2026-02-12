@@ -1,0 +1,18 @@
+{
+  "name": "@nodegame/example-number-guessing",
+  "version": "1.0.0",
+  "description": "A simple CLI number guessing game using nodegame engine",
+  "type": "module",
+  "main": "main.ts",
+  "scripts": {
+    "start": "tsx main.ts"
+  },
+  "dependencies": {
+    "@nodegame/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.7.1",
+    "typescript": "^5.3.3"
+  }
+}
