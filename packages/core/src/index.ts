@@ -1,22 +1,5 @@
 // Net — Transport layer
 
-// Identity — signature & verification
-export type {
-  ExportedKeyPair,
-  KeyPair,
-  SignedEnvelope,
-  VerificationFailureHandler,
-} from "./identity/index.js";
-export {
-  exportKeyPair,
-  generateKeyPair,
-  importKeyPair,
-  importPublicKey,
-  SignatureVerificationError,
-  SignedTransport,
-  sign,
-  verify,
-} from "./identity/index.js";
 export {
   DataChannelNotOpenError,
   IceGatheringTimeoutError,
@@ -59,3 +42,20 @@ export type {
 } from "./net/transport.js";
 export { decodeMessage, encodeMessage } from "./net/transport-message.js";
 export { WebSocketSignalingClient } from "./net/ws-signaling-client.js";
+// Identity — signature & verification
+export type {
+  ExportedKeyPair,
+  KeyPair,
+  SignedEnvelope,
+  VerificationFailureHandler,
+} from "./security/index.js";
+export {
+  exportKeyPair,
+  generateKeyPair,
+  importKeyPair,
+  importPublicKey,
+  SignatureVerificationError,
+  SignedTransport,
+  sign,
+  verify,
+} from "./security/index.js";

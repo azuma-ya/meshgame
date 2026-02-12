@@ -12,6 +12,16 @@ importers:
         specifier: ^2.3.14
         version: 2.3.14
 
+  examples/00_game_node_test:
+    dependencies:
+      '@nodegame/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   examples/01_multiplayer:
     dependencies:
       '@nodegame/core':
