@@ -5,7 +5,8 @@
   "scripts": {
     "lint": "biome check .",
     "format": "biome format . --write",
-    "examples:01_multiplayer": "cd examples/01_multiplayer && pnpm dev"
+    "examples:01_multiplayer": "pnpm --filter 01_multiplayer dev",
+    "examples:02_ws_signaling": "pnpm --filter 02_ws_signaling dev"
   },
   "author": "azuma-ya",
   "packageManager": "pnpm@10.6.3",
