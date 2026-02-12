@@ -12,3 +12,5 @@ dist/
 
 # editor
 .vscode
+
+.env

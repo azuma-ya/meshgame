@@ -6,8 +6,13 @@ export {
   SignalingParseError,
   TransportNotStartedError,
 } from "./net/errors.js";
+export type {
+  FirebaseDbRef,
+  FirebaseDbSnapshot,
+  FirebaseFunctions,
+} from "./net/firebase-signaling-client.js";
+export { FirebaseSignalingClient } from "./net/firebase-signaling-client.js";
 export type { ManualWebRtcTransportOptions } from "./net/manual-webrtc-transport.js";
-
 export { ManualWebRtcTransport } from "./net/manual-webrtc-transport.js";
 export { MeshWebRtcTransport } from "./net/mesh-webrtc-transport.js";
 export type {
