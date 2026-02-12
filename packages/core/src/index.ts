@@ -10,6 +10,11 @@ export type { ManualWebRtcTransportOptions } from "./net/manual-webrtc-transport
 
 export { ManualWebRtcTransport } from "./net/manual-webrtc-transport.js";
 export { MeshWebRtcTransport } from "./net/mesh-webrtc-transport.js";
+export type {
+  PusherInstance,
+  PusherPresenceChannel,
+} from "./net/pusher-signaling-client.js";
+export { PusherSignalingClient } from "./net/pusher-signaling-client.js";
 export type { SignaledMeshWebRtcTransportOptions } from "./net/signaled-mesh-webrtc-transport.js";
 export { SignaledMeshWebRtcTransport } from "./net/signaled-mesh-webrtc-transport.js";
 export type { SignaledWebRtcTransportOptions } from "./net/signaled-webrtc-transport.js";
