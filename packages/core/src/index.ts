@@ -1,5 +1,8 @@
 // Net — Transport layer
 
+export * from "./engine/index.js";
+export * from "./log/index.js";
+export * from "./membership/index.js";
 export {
   DataChannelNotOpenError,
   IceGatheringTimeoutError,
@@ -42,6 +45,10 @@ export type {
 } from "./net/transport.js";
 export { decodeMessage, encodeMessage } from "./net/transport-message.js";
 export { WebSocketSignalingClient } from "./net/ws-signaling-client.js";
+export * from "./node/index.js";
+export * from "./ordering/index.js";
+// GameNode layers
+export * from "./protocol/index.js";
 // Identity — signature & verification
 export type {
   ExportedKeyPair,
@@ -59,3 +66,5 @@ export {
   sign,
   verify,
 } from "./security/index.js";
+export * from "./sync/index.js";
+export * from "./time/index.js";
