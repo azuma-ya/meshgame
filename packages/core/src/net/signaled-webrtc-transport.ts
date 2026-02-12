@@ -19,9 +19,9 @@ export interface SignaledWebRtcTransportOptions
  * ```
  *  ┌────────┐   SDP (WebSocket etc.)   ┌────────┐
  *  │ Peer A │ ◄──────────────────────► │ Peer B │
- *  │        │   Data (P2P WebRTC)       │        │
- *  │        │ ◄═══════════════════════► │        │
- *  └────────┘                           └────────┘
+ *  │        │   Data (P2P WebRTC)      │        │
+ *  │        │ ◄══════════════════════► │        │
+ *  └────────┘                          └────────┘
  * ```
  *
  * @example
