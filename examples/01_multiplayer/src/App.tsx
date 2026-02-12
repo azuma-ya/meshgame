@@ -1,5 +1,5 @@
 import {
-  ManualWebRtcTransport,
+  MeshWebRtcTransport,
   type PeerEvent,
   type TransportMessage,
 } from "@nodegame/core";
@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Copy,
   MessageSquare,
+  Network,
   Plus,
   Radio,
   Send,
@@ -38,29 +39,28 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [msgInput, setMsgInput] = useState("");
 
-  // Offer Flow State
+  // Bootstrap Offer Flow State
   const [offerPeerId, setOfferPeerId] = useState("");
   const [generatedOffer, setGeneratedOffer] = useState("");
   const [answerInput, setAnswerInput] = useState("");
 
-  // Answer Flow State
+  // Bootstrap Answer Flow State
   const [acceptPeerId, setAcceptPeerId] = useState("");
   const [offerInput, setOfferInput] = useState("");
   const [generatedAnswer, setGeneratedAnswer] = useState("");
 
-  const transportRef = useRef<ManualWebRtcTransport | null>(null);
+  const transportRef = useRef<MeshWebRtcTransport | null>(null);
 
   // ---- Logic ----
 
   const log = useCallback((type: "info" | "error" | "sig", text: string) => {
     console.log(`[${type}] ${text}`);
-    // In a real app we might show this in UI, but for now console is fine
   }, []);
 
   const handleStart = async () => {
     if (!selfId.trim()) return;
 
-    const t = new ManualWebRtcTransport({ self: selfId });
+    const t = new MeshWebRtcTransport({ self: selfId });
     transportRef.current = t;
 
     t.onPeerEvent((ev: PeerEvent) => {
@@ -69,6 +69,9 @@ export default function App() {
     });
 
     t.onMessage((from: string, msg: TransportMessage) => {
+      // Filter out internal mesh signaling messages from the chat UI
+      if (msg.topic.startsWith("__")) return;
+
       const text = new TextDecoder().decode(msg.payload);
       setMessages((prev) => [
         ...prev,
@@ -85,6 +88,8 @@ export default function App() {
     setIsStarted(true);
     log("info", `Started as ${selfId}`);
   };
+
+  // ---- Bootstrap signaling (manual, only for the first peer) ----
 
   const handleCreateOffer = async () => {
     if (!transportRef.current || !offerPeerId.trim()) return;
@@ -162,7 +167,7 @@ export default function App() {
         <div className="w-full max-w-sm space-y-6 bg-card p-6 rounded-lg border border-border shadow-sm">
           <div className="text-center space-y-2">
             <div className="inline-flex p-3 bg-primary/10 rounded-full mb-2">
-              <Radio className="w-6 h-6 text-primary" />
+              <Network className="w-6 h-6 text-primary" />
             </div>
             <h1 className="text-2xl font-semibold tracking-tight">NodeGame</h1>
             <p className="text-sm text-muted-foreground">
@@ -224,8 +229,12 @@ export default function App() {
         <section className="lg:col-span-1 space-y-6">
           <div className="bg-card rounded-lg border shadow-sm p-6 space-y-4">
             <h2 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
-              <Plus className="w-4 h-4" /> Connection
+              <Plus className="w-4 h-4" /> Bootstrap Connection
             </h2>
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              Connect to one peer manually. Additional peers will be discovered
+              and connected automatically via the mesh.
+            </p>
 
             {/* Create Offer Flow */}
             <div className="space-y-4 pt-2">
@@ -335,12 +344,12 @@ export default function App() {
           {/* Peer List */}
           <div className="bg-card rounded-lg border shadow-sm p-6 space-y-4">
             <h2 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
-              <Users className="w-4 h-4" /> Network
+              <Users className="w-4 h-4" /> Mesh Network
             </h2>
             {peers.length === 0 ? (
               <div className="text-center py-8 border border-dashed rounded-lg bg-muted/20">
                 <p className="text-xs text-muted-foreground italic">
-                  Disconnected from mesh
+                  No peers connected
                 </p>
               </div>
             ) : (
@@ -364,13 +373,21 @@ export default function App() {
                     </div>
                   </div>
                 ))}
+                {peers.length >= 2 && (
+                  <div className="flex items-center gap-1.5 justify-center pt-2">
+                    <Network className="w-3 h-3 text-primary" />
+                    <span className="text-[10px] text-primary font-medium">
+                      Full mesh established
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </section>
 
         {/* Chat Area */}
-        <section className="lg:col-span-2 bg-card rounded-lg border shadow-sm flex flex-col h-[600px] overflow-hidden">
+        <section className="lg:col-span-2 bg-card rounded-lg border shadow-sm flex flex-col h-150 overflow-hidden">
           <div className="p-4 border-b flex items-center justify-between bg-muted/30">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-muted-foreground" />

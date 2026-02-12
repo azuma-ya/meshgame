@@ -40,11 +40,11 @@ const DATA_CHANNEL_LABEL = "game";
 export class ManualWebRtcTransport implements Transport {
   readonly self: string;
 
-  private readonly iceTimeoutMs: number;
-  private readonly peers: Map<string, PeerSlot> = new Map();
+  protected readonly iceTimeoutMs: number;
+  protected readonly peers: Map<string, PeerSlot> = new Map();
 
-  private messageHandlers: MessageHandler[] = [];
-  private peerEventHandlers: PeerEventHandler[] = [];
+  protected messageHandlers: MessageHandler[] = [];
+  protected peerEventHandlers: PeerEventHandler[] = [];
 
   private started = false;
 
@@ -123,7 +123,10 @@ export class ManualWebRtcTransport implements Transport {
     await this.waitForIceGathering(pc);
     console.log("[transport] createOfferSdp: ICE gathering complete.");
 
-    return btoa(JSON.stringify(pc.localDescription!.toJSON()));
+    if (!pc.localDescription) {
+      throw new Error("Local description is not set");
+    }
+    return btoa(JSON.stringify(pc.localDescription.toJSON()));
   }
 
   /**
@@ -153,7 +156,10 @@ export class ManualWebRtcTransport implements Transport {
     await pc.setLocalDescription(answer);
     await this.waitForIceGathering(pc);
 
-    return btoa(JSON.stringify(pc.localDescription!.toJSON()));
+    if (!pc.localDescription) {
+      throw new Error("Local description is not set");
+    }
+    return btoa(JSON.stringify(pc.localDescription.toJSON()));
   }
 
   /**
@@ -182,13 +188,13 @@ export class ManualWebRtcTransport implements Transport {
 
   // ---- Internal helpers ----
 
-  private assertStarted(): void {
+  protected assertStarted(): void {
     if (!this.started) {
       throw new TransportNotStartedError();
     }
   }
 
-  private createPeerConnection(_peerId: string): RTCPeerConnection {
+  protected createPeerConnection(_peerId: string): RTCPeerConnection {
     const pc = new RTCPeerConnection();
 
     pc.onconnectionstatechange = () => {
@@ -205,7 +211,7 @@ export class ManualWebRtcTransport implements Transport {
     return pc;
   }
 
-  private removePeer(peerId: string, reason: string): void {
+  protected removePeer(peerId: string, reason: string): void {
     const slot = this.peers.get(peerId);
     if (!slot) return;
 
@@ -218,7 +224,7 @@ export class ManualWebRtcTransport implements Transport {
     }
   }
 
-  private decodeSdp(encoded: string): RTCSessionDescriptionInit {
+  protected decodeSdp(encoded: string): RTCSessionDescriptionInit {
     try {
       const json = atob(encoded);
       return JSON.parse(json) as RTCSessionDescriptionInit;
@@ -227,7 +233,7 @@ export class ManualWebRtcTransport implements Transport {
     }
   }
 
-  private waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
+  protected waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
     if (pc.iceGatheringState === "complete") {
       return Promise.resolve();
     }
@@ -268,7 +274,10 @@ export class ManualWebRtcTransport implements Transport {
     });
   }
 
-  private attachDataChannelListeners(peerId: string, dc: RTCDataChannel): void {
+  protected attachDataChannelListeners(
+    peerId: string,
+    dc: RTCDataChannel,
+  ): void {
     dc.binaryType = "arraybuffer";
 
     dc.onopen = () => {
