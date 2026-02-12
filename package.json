@@ -1,0 +1,14 @@
+{
+  "name": "nodegame",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "lint": "biome check .",
+    "format": "biome format . --write"
+  },
+  "author": "azuma-ya",
+  "packageManager": "pnpm@10.6.3",
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.14"
+  }
+}
