@@ -305,18 +305,23 @@ export class LockstepOrdering implements Ordering {
           const nowMs = Date.now();
           this.config.t0Ms = nowMs - nodeMsg.tick * this.config.tickMs;
 
-          // Before moving currentTick, seal the "old" future ticks if necessary
-          // so we don't leave gaps in the seals we promised to send.
-          const oldNewestSeal =
-            this.currentTick - 1 + this.config.inputDelayTicks;
-
           // Perform warp
           this.currentTick = nodeMsg.tick;
 
-          // Seal everything from oldNewestSeal up to the new perspective
-          const newNewestSeal =
-            this.currentTick - 1 + this.config.inputDelayTicks;
-          for (let s = oldNewestSeal; s <= newNewestSeal; s++) {
+          // Update all existing peerFirstTicks to align with the new warped reality.
+          // This prevents the newcomer from getting stuck waiting for past seals from existing peers.
+          for (const [pId, firstTick] of this.peerFirstTick.entries()) {
+            const newVal = Math.max(
+              firstTick,
+              this.currentTick + this.config.inputDelayTicks,
+            );
+            this.peerFirstTick.set(pId, newVal);
+            console.log(`[ordering] Warped peer ${pId} firstTick to ${newVal}`);
+          }
+
+          // Before moving forward, seal "old" future ticks if necessary
+          const newestSeal = this.currentTick - 1 + this.config.inputDelayTicks;
+          for (let s = 0; s <= newestSeal; s++) {
             this.sealTickIfNeeded(s);
           }
 
@@ -335,9 +340,8 @@ export class LockstepOrdering implements Ordering {
     // If you already manage membership elsewhere, you can remove these lines.
     if (ev.type === "peer_connected") {
       const currentTick = this.computeTick(Date.now());
-      // Give a small window (5 ticks) for the newcomer to sync and send their first actions.
-      // Ticks before this 'effectiveTick' will not wait for this peer's seal.
-      const effectiveTick = currentTick + 5;
+      // The first tick this peer can possibly send an action or seal for is currentTick + delay.
+      const effectiveTick = currentTick + this.config.inputDelayTicks;
       this.peerFirstTick.set(ev.peerId, effectiveTick);
       console.log(
         `[ordering] Peer connected: ${ev.peerId}. Effective from tick ${effectiveTick} (now ${currentTick})`,
