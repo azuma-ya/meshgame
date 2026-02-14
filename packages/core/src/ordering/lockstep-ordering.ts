@@ -7,6 +7,7 @@ import type {
 } from "../net/transport.js";
 import { decodeMessage, encodeMessage } from "../protocol/codec.js";
 import type { NodeMessage } from "../protocol/types.js";
+import { getCurrentTick, getTickDeadline } from "../time/tick.js";
 import type { Ordering } from "./types.js";
 
 const NODE_TOPIC = "node";
@@ -34,9 +35,6 @@ export class LockstepOrdering implements Ordering {
    * When we have seals from ALL peers for a tick, that tick can be committed.
    */
   private readonly seals = new Map<number, Map<string, number>>();
-
-  /** Track which ticks each peer joined at. */
-  private readonly peerJoinedAtTick = new Map<string, number>();
 
   private currentTick = -1;
   // private committedTick = -1;
@@ -259,8 +257,8 @@ export class LockstepOrdering implements Ordering {
     const nodeMsg = decodeMessage(msg.payload);
 
     // Room guard (many messages have roomId)
-    const roomId = (nodeMsg as unknown as Record<string, unknown>).roomId;
-    if (typeof roomId === "string" && roomId !== this.config.roomId) return;
+    const roomId = (nodeMsg as any).roomId;
+    if (roomId && roomId !== this.config.roomId) return;
 
     switch (nodeMsg.type) {
       case "ACTION_PROPOSE": {
@@ -295,22 +293,6 @@ export class LockstepOrdering implements Ordering {
     // Let the app update membership externally if it wants; but we can mirror connect/disconnect.
     // If you already manage membership elsewhere, you can remove these lines.
     if (ev.type === "peer_connected") {
-      // Set the tick at which this peer is expected to start contributing.
-      // We start expecting seals only after a small delay to allow them to start their loop.
-      const nowTick = this.computeTick(Date.now());
-      const joinedAt =
-        this.currentTick === -1
-          ? nowTick + this.config.inputDelayTicks
-          : this.currentTick + this.config.inputDelayTicks;
-
-      // Ensure we don't accidentally set a joinedAt tick in the past relative to current loop
-      const finalJoinedAt = Math.max(joinedAt, nowTick);
-
-      this.peerJoinedAtTick.set(ev.peerId, finalJoinedAt);
-      console.log(
-        `[ordering] Peer ${ev.peerId} connected. Expecting seals from tick ${finalJoinedAt}. (currentTick: ${this.currentTick}, nowTick: ${nowTick})`,
-      );
-
       if (!this.membership.getPeer(ev.peerId)) {
         this.membership.addPeer({
           peerId: ev.peerId,
@@ -320,7 +302,6 @@ export class LockstepOrdering implements Ordering {
       }
     } else if (ev.type === "peer_disconnected") {
       this.membership.removePeer(ev.peerId);
-      this.peerJoinedAtTick.delete(ev.peerId);
     }
 
     for (const cb of this.peerCallbacks) cb(ev);
@@ -357,19 +338,7 @@ export class LockstepOrdering implements Ordering {
     if (!byAuthor) return false;
 
     for (const peerId of peers.sort()) {
-      // Deadlock prevention: only wait for peers who were already in the session at this tick.
-      const joinedAt = this.peerJoinedAtTick.get(peerId);
-      if (joinedAt !== undefined && tick < joinedAt) continue;
-
-      if (!byAuthor.has(peerId)) {
-        // Log periodically to avoid flooding
-        if (tick % 10 === 0) {
-          console.log(
-            `[ordering] Still waiting for seal from ${peerId} for tick ${tick}. JoinedAt: ${joinedAt}, Membership: ${peers.join(", ")}`,
-          );
-        }
-        return false;
-      }
+      if (!byAuthor.has(peerId)) return false;
     }
     return true;
   }

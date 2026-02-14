@@ -171,14 +171,6 @@ export class ManualWebRtcTransport implements Transport {
     if (!slot) {
       throw new TransportNotStartedError();
     }
-
-    if (slot.pc.signalingState !== "have-local-offer") {
-      console.warn(
-        `[transport] Ignoring answer for ${peerId} in signalingState: ${slot.pc.signalingState}`,
-      );
-      return;
-    }
-
     const answerDesc = this.decodeSdp(answer);
     await slot.pc.setRemoteDescription(answerDesc);
   }
@@ -203,18 +195,10 @@ export class ManualWebRtcTransport implements Transport {
   }
 
   protected createPeerConnection(_peerId: string): RTCPeerConnection {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun2.l.google.com:19302" },
-      ],
-    });
+    const pc = new RTCPeerConnection();
 
     pc.onconnectionstatechange = () => {
-      console.log(
-        `[transport] connectionState for ${_peerId}: ${pc.connectionState}`,
-      );
+      console.log(`[transport] connectionState: ${pc.connectionState}`);
       if (
         pc.connectionState === "disconnected" ||
         pc.connectionState === "failed" ||
@@ -222,18 +206,6 @@ export class ManualWebRtcTransport implements Transport {
       ) {
         this.removePeer(_peerId, `connection ${pc.connectionState}`);
       }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log(
-        `[transport] iceConnectionState for ${_peerId}: ${pc.iceConnectionState}`,
-      );
-    };
-
-    pc.onicegatheringstatechange = () => {
-      console.log(
-        `[transport] iceGatheringState for ${_peerId}: ${pc.iceGatheringState}`,
-      );
     };
 
     return pc;
@@ -266,22 +238,11 @@ export class ManualWebRtcTransport implements Transport {
       return Promise.resolve();
     }
 
-    const ICE_TIMEOUT_MS = 15_000; // Increased to 15s
-
     return new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         cleanup();
-        console.warn(
-          `[transport] ICE gathering timed out after ${ICE_TIMEOUT_MS}ms. State: ${pc.iceGatheringState}`,
-        );
-        // If we have some candidates, we can try to proceed instead of failing hard
-        if (pc.localDescription?.sdp.includes("a=candidate")) {
-          console.log("[transport] Proceeding with partial candidates...");
-          resolve();
-        } else {
-          reject(new IceGatheringTimeoutError(ICE_TIMEOUT_MS));
-        }
-      }, ICE_TIMEOUT_MS);
+        reject(new IceGatheringTimeoutError(this.iceTimeoutMs));
+      }, this.iceTimeoutMs);
 
       const cleanup = () => {
         clearTimeout(timer);
@@ -295,24 +256,16 @@ export class ManualWebRtcTransport implements Transport {
       };
 
       const onStateChange = () => {
-        console.log(
-          `[transport] ICE gathering state change: ${pc.iceGatheringState}`,
-        );
         if (pc.iceGatheringState === "complete") {
           done();
         }
       };
 
+      // icecandidate with null candidate is the most reliable
+      // signal that gathering is complete.
       const onCandidate = (ev: RTCPeerConnectionIceEvent) => {
         if (ev.candidate === null) {
-          console.log(
-            "[transport] ICE gathering signaled complete (null candidate)",
-          );
           done();
-        } else {
-          console.log(
-            `[transport] Candidate gathered: ${ev.candidate.type} ${ev.candidate.protocol}`,
-          );
         }
       };
 

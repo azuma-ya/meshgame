@@ -23,7 +23,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onStart }) => {
   ];
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-background p-4 animate-in fade-in duration-500">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4 animate-in fade-in duration-500">
       <div className="w-full max-w-md bg-card p-8 rounded-lg shadow-sm border border-border space-y-8">
         <div className="text-left space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">分散農業</h1>

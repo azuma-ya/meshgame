@@ -24,7 +24,7 @@ export const Board: React.FC<BoardProps> = ({ view, onSelectTile, selfId }) => {
   const self = view.players[selfId];
 
   return (
-    <div className="grid grid-cols-10 grid-rows-10 gap-0 bg-border p-px rounded-lg aspect-square w-full max-w-[80vh] border border-border">
+    <div className="grid grid-cols-10 grid-rows-10 gap-0 bg-border p-px rounded-lg shadow-sm aspect-square w-full max-w-[80vh] border border-border">
       {view.grid.map((row, y) =>
         row.map((tile, x) => {
           const key = `${x}-${y}`;

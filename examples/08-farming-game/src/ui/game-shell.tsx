@@ -154,7 +154,7 @@ export const GameShell: React.FC<GameShellProps> = ({
     <div
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className="flex flex-col h-dvh w-screen bg-background select-none animate-in fade-in duration-700"
+      className="flex flex-col h-screen w-screen bg-background select-none animate-in fade-in duration-700"
     >
       {/* HUD - Shadcn Style */}
       <header
@@ -249,62 +249,58 @@ export const GameShell: React.FC<GameShellProps> = ({
           />
         </div>
 
-        <div className="flex-1 bg-muted/20 flex flex-col items-center justify-center overflow-auto">
-          <div className="flex-1 w-full flex items-center justify-center p-4 sm:p-8">
-            {view.status === "LOBBY" ? (
-              <div className="max-w-md w-full bg-card border border-border rounded-lg p-8 shadow-sm space-y-6">
-                <div className="space-y-2 text-center">
-                  <h2 className="text-xl font-semibold tracking-tight">
-                    準備はいいですか？
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    開始ボタンを押すとシミュレーションが始まります。
-                  </p>
-                </div>
-                <div className="rounded-md bg-muted p-4 font-mono text-xs text-muted-foreground space-y-1">
-                  <p># プロトコール: NODECORE_FARMING_V2</p>
-                  <p># 参加人数: {Object.keys(view.players).length}</p>
-                  <p># 通信間隔: {ORDERING_TICK_MS}ms</p>
-                </div>
-
-                <button
-                  onClick={() => onAction({ type: "START_GAME" })}
-                  className="w-full flex items-center justify-center gap-2 rounded-md bg-primary py-3 text-sm font-bold text-primary-foreground hover:bg-primary/90 transition-all active:scale-[0.98]"
-                >
-                  <Play size={16} fill="currentColor" />
-                  シミュレーションを開始
-                </button>
+        <div className="flex-1 bg-muted/20 flex items-center justify-center p-4 sm:p-8 pb-24 lg:pb-8 overflow-auto safe-area-bottom">
+          {view.status === "LOBBY" ? (
+            <div className="max-w-md w-full bg-card border border-border rounded-lg p-8 shadow-sm space-y-6">
+              <div className="space-y-2 text-center">
+                <h2 className="text-xl font-semibold tracking-tight">
+                  準備はいいですか？
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  開始ボタンを押すとシミュレーションが始まります。
+                </p>
               </div>
-            ) : (
-              <Board
-                view={view}
-                selfId={selfId}
-                onSelectTile={(x, y) => {
-                  if (!localPlayer) {
-                    onAction({ type: "SELECT_TILE", x, y });
-                    return;
-                  }
-                  // Determine if we should MOVE or SELECT
-                  if (!localPlayer.position) {
-                    onAction({ type: "SELECT_TILE", x, y });
-                    return;
-                  }
-                  const dx = Math.abs(localPlayer.position.x - x);
-                  const dy = Math.abs(localPlayer.position.y - y);
-                  if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
-                    onAction({
-                      type: "MOVE",
-                      target: { x, y },
-                    });
-                  } else {
-                    onAction({ type: "SELECT_TILE", x, y });
-                  }
-                }}
-              />
-            )}
-          </div>
-          {/* Spacer to push board up so it's centered between header and bottom bar on mobile */}
-          <div className="h-24 lg:hidden shrink-0 safe-area-bottom" />
+              <div className="rounded-md bg-muted p-4 font-mono text-xs text-muted-foreground space-y-1">
+                <p># プロトコル: NODECORE_FARMING_V2</p>
+                <p># 参加人数: {Object.keys(view.players).length}</p>
+                <p># 通信間隔: {ORDERING_TICK_MS}ms</p>
+              </div>
+
+              <button
+                onClick={() => onAction({ type: "START_GAME" })}
+                className="w-full flex items-center justify-center gap-2 rounded-md bg-primary py-3 text-sm font-bold text-primary-foreground hover:bg-primary/90 transition-all active:scale-[0.98]"
+              >
+                <Play size={16} fill="currentColor" />
+                シミュレーションを開始
+              </button>
+            </div>
+          ) : (
+            <Board
+              view={view}
+              selfId={selfId}
+              onSelectTile={(x, y) => {
+                if (!localPlayer) {
+                  onAction({ type: "SELECT_TILE", x, y });
+                  return;
+                }
+                // Determine if we should MOVE or SELECT
+                if (!localPlayer.position) {
+                  onAction({ type: "SELECT_TILE", x, y });
+                  return;
+                }
+                const dx = Math.abs(localPlayer.position.x - x);
+                const dy = Math.abs(localPlayer.position.y - y);
+                if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+                  onAction({
+                    type: "MOVE",
+                    target: { x, y },
+                  });
+                } else {
+                  onAction({ type: "SELECT_TILE", x, y });
+                }
+              }}
+            />
+          )}
         </div>
 
         {/* Right Sidebar - Actions/Market */}
