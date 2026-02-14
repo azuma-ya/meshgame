@@ -7,7 +7,6 @@ import type {
 } from "../net/transport.js";
 import { decodeMessage, encodeMessage } from "../protocol/codec.js";
 import type { NodeMessage } from "../protocol/types.js";
-import { getCurrentTick, getTickDeadline } from "../time/tick.js";
 import type { Ordering } from "./types.js";
 
 const NODE_TOPIC = "node";
@@ -257,8 +256,8 @@ export class LockstepOrdering implements Ordering {
     const nodeMsg = decodeMessage(msg.payload);
 
     // Room guard (many messages have roomId)
-    const roomId = (nodeMsg as any).roomId;
-    if (roomId && roomId !== this.config.roomId) return;
+    const roomId = (nodeMsg as unknown as Record<string, unknown>).roomId;
+    if (typeof roomId === "string" && roomId !== this.config.roomId) return;
 
     switch (nodeMsg.type) {
       case "ACTION_PROPOSE": {
@@ -338,7 +337,15 @@ export class LockstepOrdering implements Ordering {
     if (!byAuthor) return false;
 
     for (const peerId of peers.sort()) {
-      if (!byAuthor.has(peerId)) return false;
+      if (!byAuthor.has(peerId)) {
+        // Log periodically to avoid flooding
+        if (tick % 10 === 0) {
+          console.log(
+            `[ordering] Still waiting for seal from ${peerId} for tick ${tick}. Membership: ${peers.join(", ")}`,
+          );
+        }
+        return false;
+      }
     }
     return true;
   }

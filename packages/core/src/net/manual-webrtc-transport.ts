@@ -195,10 +195,18 @@ export class ManualWebRtcTransport implements Transport {
   }
 
   protected createPeerConnection(_peerId: string): RTCPeerConnection {
-    const pc = new RTCPeerConnection();
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+      ],
+    });
 
     pc.onconnectionstatechange = () => {
-      console.log(`[transport] connectionState: ${pc.connectionState}`);
+      console.log(
+        `[transport] connectionState for ${_peerId}: ${pc.connectionState}`,
+      );
       if (
         pc.connectionState === "disconnected" ||
         pc.connectionState === "failed" ||
@@ -206,6 +214,18 @@ export class ManualWebRtcTransport implements Transport {
       ) {
         this.removePeer(_peerId, `connection ${pc.connectionState}`);
       }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log(
+        `[transport] iceConnectionState for ${_peerId}: ${pc.iceConnectionState}`,
+      );
+    };
+
+    pc.onicegatheringstatechange = () => {
+      console.log(
+        `[transport] iceGatheringState for ${_peerId}: ${pc.iceGatheringState}`,
+      );
     };
 
     return pc;
