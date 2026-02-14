@@ -7,7 +7,6 @@ import type {
 } from "../net/transport.js";
 import { decodeMessage, encodeMessage } from "../protocol/codec.js";
 import type { NodeMessage } from "../protocol/types.js";
-import { getCurrentTick } from "../time/tick.js";
 import type { Ordering } from "./types.js";
 
 const NODE_TOPIC = "node";
@@ -319,17 +318,20 @@ export class LockstepOrdering implements Ordering {
         });
       }
       // Send current tick to the new peer to help them sync.
-      const currentTick = this.computeTick(Date.now());
-      const syncMsg: NodeMessage = {
-        type: "SYNC_CLOCK",
-        roomId: this.config.roomId,
-        peerId: this.transport.self,
-        tick: currentTick,
-      };
-      this.transport.send(ev.peerId, {
-        topic: NODE_TOPIC,
-        payload: encodeMessage(syncMsg),
-      });
+      // Small delay to ensure the DataChannel is fully ready for sending.
+      setTimeout(() => {
+        const currentTick = this.computeTick(Date.now());
+        const syncMsg: NodeMessage = {
+          type: "SYNC_CLOCK",
+          roomId: this.config.roomId,
+          peerId: this.transport.self,
+          tick: currentTick,
+        };
+        this.transport.send(ev.peerId, {
+          topic: NODE_TOPIC,
+          payload: encodeMessage(syncMsg),
+        });
+      }, 100);
     } else if (ev.type === "peer_disconnected") {
       this.membership.removePeer(ev.peerId);
     }

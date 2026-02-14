@@ -91,18 +91,20 @@ export function useGameLogic() {
 
     node.onPeerEvent((ev: PeerEvent) => {
       if (ev.type === "peer_connected") {
-        // Re-announce JOIN so the new peer knows about us
-        node.submit({
-          type: "JOIN",
-          playerId: id,
-          name: id,
-          color: userColorRef.current,
-        });
-        // } else if (ev.type === "peer_disconnected") {
-        //   node.submit({
-        //     type: "LEAVE",
-        //     playerId: ev.peerId,
-        //   });
+        console.log(
+          `[game] Peer connected: ${ev.peerId}. Scheduling JOIN re-announcement...`,
+        );
+        // Wait 1 second for clock sync to finish and connection stability before announcing
+        setTimeout(() => {
+          if (!nodeRef.current) return;
+          console.log(`[game] Re-announcing JOIN for ${id}`);
+          nodeRef.current.submit({
+            type: "JOIN",
+            playerId: id,
+            name: id,
+            color: userColorRef.current,
+          });
+        }, 1000);
       }
     });
 
