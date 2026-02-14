@@ -50,6 +50,12 @@ export class LockstepOrdering implements Ordering {
   /** Track which ticks we already sealed (sent seal). */
   private readonly sealedTicks = new Set<number>();
 
+  /**
+   * The first tick a peer is expected to participate in.
+   * Peers joining late don't need to seal past ticks.
+   */
+  private readonly peerFirstTick = new Map<string, number>();
+
   /** Set after start() */
   private started = false;
 
@@ -310,6 +316,11 @@ export class LockstepOrdering implements Ordering {
     // Let the app update membership externally if it wants; but we can mirror connect/disconnect.
     // If you already manage membership elsewhere, you can remove these lines.
     if (ev.type === "peer_connected") {
+      const currentTick = this.computeTick(Date.now());
+      // Mark the first tick this peer is effective for.
+      // They don't need to seal earlier ticks.
+      this.peerFirstTick.set(ev.peerId, currentTick);
+
       if (!this.membership.getPeer(ev.peerId)) {
         this.membership.addPeer({
           peerId: ev.peerId,
@@ -334,6 +345,7 @@ export class LockstepOrdering implements Ordering {
       }, 100);
     } else if (ev.type === "peer_disconnected") {
       this.membership.removePeer(ev.peerId);
+      this.peerFirstTick.delete(ev.peerId);
     }
 
     for (const cb of this.peerCallbacks) cb(ev);
@@ -367,10 +379,18 @@ export class LockstepOrdering implements Ordering {
     if (!peers.includes(this.transport.self)) peers.push(this.transport.self);
 
     const byAuthor = this.seals.get(tick);
-    if (!byAuthor) return false;
 
-    for (const peerId of peers.sort()) {
-      if (!byAuthor.has(peerId)) return false;
+    for (const peerId of peers) {
+      // Barrier logic:
+      // Only require a seal if the peer was already present and "effective" for this tick.
+      const firstTick = this.peerFirstTick.get(peerId) ?? 0;
+      if (tick < firstTick) {
+        continue;
+      }
+
+      if (!byAuthor || !byAuthor.has(peerId)) {
+        return false;
+      }
     }
     return true;
   }
@@ -388,6 +408,12 @@ export class LockstepOrdering implements Ordering {
       new Map<string, { seq: number; action: SignedAction }[]>();
 
     for (const author of peers.sort()) {
+      // Logic: Only process actions from this author if they were already joined for this tick.
+      const firstTick = this.peerFirstTick.get(author) ?? 0;
+      if (tick < firstTick) {
+        continue;
+      }
+
       const arr = byAuthor.get(author) ?? [];
       arr.sort((a, b) => a.seq - b.seq);
       for (const item of arr) actions.push(item.action);
