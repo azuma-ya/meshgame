@@ -75,7 +75,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
   return (
     <div
       className={cn(
-        "w-80 bg-card border-l border-border flex flex-col overflow-hidden animate-in slide-in-from-right duration-500",
+        "w-80 h-full bg-card border-l border-border flex flex-col overflow-hidden animate-in slide-in-from-right duration-500",
         className,
       )}
     >
