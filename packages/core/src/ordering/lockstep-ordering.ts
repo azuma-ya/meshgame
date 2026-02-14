@@ -7,7 +7,7 @@ import type {
 } from "../net/transport.js";
 import { decodeMessage, encodeMessage } from "../protocol/codec.js";
 import type { NodeMessage } from "../protocol/types.js";
-import { getCurrentTick, getTickDeadline } from "../time/tick.js";
+import { getCurrentTick } from "../time/tick.js";
 import type { Ordering } from "./types.js";
 
 const NODE_TOPIC = "node";
@@ -257,7 +257,8 @@ export class LockstepOrdering implements Ordering {
     const nodeMsg = decodeMessage(msg.payload);
 
     // Room guard (many messages have roomId)
-    const roomId = (nodeMsg as any).roomId;
+    const roomId =
+      "roomId" in nodeMsg ? (nodeMsg as { roomId: string }).roomId : undefined;
     if (roomId && roomId !== this.config.roomId) return;
 
     switch (nodeMsg.type) {
@@ -284,6 +285,23 @@ export class LockstepOrdering implements Ordering {
         // For now, ignore and rely on local lockstep barrier.
         return;
       }
+      case "SYNC_CLOCK": {
+        if (nodeMsg.peerId === this.transport.self) return;
+        const localTick = this.computeTick(Date.now());
+        if (nodeMsg.tick > localTick) {
+          console.log(
+            `[ordering] Clock skew detected! Remote is ahead: ${nodeMsg.tick} (local: ${localTick}). Warping local clock.`,
+          );
+          // Adjust t0Ms so that computeTick(now) returns nodeMsg.tick
+          // nodeMsg.tick = floor((nowMs - t0Ms) / tickMs)
+          // -> t0Ms = nowMs - (nodeMsg.tick * tickMs)
+          const nowMs = Date.now();
+          this.config.t0Ms = nowMs - nodeMsg.tick * this.config.tickMs;
+          // Trigger a tick update immediately with new t0
+          this.tick(nowMs);
+        }
+        return;
+      }
       default:
         return;
     }
@@ -300,6 +318,18 @@ export class LockstepOrdering implements Ordering {
           joinedAt: Date.now(),
         });
       }
+      // Send current tick to the new peer to help them sync.
+      const currentTick = this.computeTick(Date.now());
+      const syncMsg: NodeMessage = {
+        type: "SYNC_CLOCK",
+        roomId: this.config.roomId,
+        peerId: this.transport.self,
+        tick: currentTick,
+      };
+      this.transport.send(ev.peerId, {
+        topic: NODE_TOPIC,
+        payload: encodeMessage(syncMsg),
+      });
     } else if (ev.type === "peer_disconnected") {
       this.membership.removePeer(ev.peerId);
     }

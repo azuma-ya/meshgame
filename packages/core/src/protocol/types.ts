@@ -31,10 +31,18 @@ export type NodeMessage =
   | ActionProposeMessage
   | ActionSealMessage
   | ActionCommitMessage
+  | SyncClockMessage
   | PingMessage
   | PongMessage;
 
 // ---- Connection / Handshake ----
+
+export interface SyncClockMessage {
+  type: "SYNC_CLOCK";
+  roomId: string;
+  peerId: string;
+  tick: number;
+}
 
 export interface HelloMessage {
   type: "HELLO";
