@@ -5,10 +5,9 @@ import { MemoryLogStore } from "../log/memory-log-store.js";
 import type { ActionLog, Commit, SignedAction } from "../log/types.js";
 import type { PeerEvent } from "../net/transport.js";
 import type { Ordering } from "../ordering/index.js";
-import type { ScheduleDispatcher } from "../time/schedule-dispatcher.js";
 import { createTimeSource, type TimeSource } from "../time/time-source.js";
 
-export interface GameNodeOptions<O> {
+export interface GameNodeOptions {
   ordering: Ordering;
   log?: ActionLog;
   playerId: string;
@@ -44,7 +43,7 @@ export class GameNode<S, A, O = unknown> {
 
   private lastSchedulerCommittedTick = -1;
 
-  constructor(opts: GameNodeOptions<O>, engine: EngineFacade<S, A, O>) {
+  constructor(opts: GameNodeOptions, engine: EngineFacade<S, A, O>) {
     this.ordering = opts.ordering;
     this.engine = engine;
     this.state = engine.initialState;
@@ -67,6 +66,11 @@ export class GameNode<S, A, O = unknown> {
           await this.log.append(commit);
 
           const committedTick = commit.metadata.orderingTick;
+          if (committedTick % 10 === 0) {
+            console.log(
+              `[GameNode] processing commit for tick ${committedTick}. Pending actions: ${this.pendingActions.length}`,
+            );
+          }
 
           // 2) Apply commit.actions
           this.authoritativeState = this.applyCommitToState(

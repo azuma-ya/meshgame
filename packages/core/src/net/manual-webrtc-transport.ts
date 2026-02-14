@@ -258,11 +258,22 @@ export class ManualWebRtcTransport implements Transport {
       return Promise.resolve();
     }
 
+    const ICE_TIMEOUT_MS = 15_000; // Increased to 15s
+
     return new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         cleanup();
-        reject(new IceGatheringTimeoutError(this.iceTimeoutMs));
-      }, this.iceTimeoutMs);
+        console.warn(
+          `[transport] ICE gathering timed out after ${ICE_TIMEOUT_MS}ms. State: ${pc.iceGatheringState}`,
+        );
+        // If we have some candidates, we can try to proceed instead of failing hard
+        if (pc.localDescription?.sdp.includes("a=candidate")) {
+          console.log("[transport] Proceeding with partial candidates...");
+          resolve();
+        } else {
+          reject(new IceGatheringTimeoutError(ICE_TIMEOUT_MS));
+        }
+      }, ICE_TIMEOUT_MS);
 
       const cleanup = () => {
         clearTimeout(timer);
@@ -276,16 +287,24 @@ export class ManualWebRtcTransport implements Transport {
       };
 
       const onStateChange = () => {
+        console.log(
+          `[transport] ICE gathering state change: ${pc.iceGatheringState}`,
+        );
         if (pc.iceGatheringState === "complete") {
           done();
         }
       };
 
-      // icecandidate with null candidate is the most reliable
-      // signal that gathering is complete.
       const onCandidate = (ev: RTCPeerConnectionIceEvent) => {
         if (ev.candidate === null) {
+          console.log(
+            "[transport] ICE gathering signaled complete (null candidate)",
+          );
           done();
+        } else {
+          console.log(
+            `[transport] Candidate gathered: ${ev.candidate.type} ${ev.candidate.protocol}`,
+          );
         }
       };
 
