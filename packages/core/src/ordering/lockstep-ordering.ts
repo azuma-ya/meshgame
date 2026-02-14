@@ -297,13 +297,18 @@ export class LockstepOrdering implements Ordering {
     if (ev.type === "peer_connected") {
       // Set the tick at which this peer is expected to start contributing.
       // We start expecting seals only after a small delay to allow them to start their loop.
+      const nowTick = this.computeTick(Date.now());
       const joinedAt =
         this.currentTick === -1
-          ? this.config.inputDelayTicks
+          ? nowTick + this.config.inputDelayTicks
           : this.currentTick + this.config.inputDelayTicks;
-      this.peerJoinedAtTick.set(ev.peerId, joinedAt);
+
+      // Ensure we don't accidentally set a joinedAt tick in the past relative to current loop
+      const finalJoinedAt = Math.max(joinedAt, nowTick);
+
+      this.peerJoinedAtTick.set(ev.peerId, finalJoinedAt);
       console.log(
-        `[ordering] Peer ${ev.peerId} connected. Expecting seals from tick ${joinedAt}.`,
+        `[ordering] Peer ${ev.peerId} connected. Expecting seals from tick ${finalJoinedAt}. (currentTick: ${this.currentTick}, nowTick: ${nowTick})`,
       );
 
       if (!this.membership.getPeer(ev.peerId)) {

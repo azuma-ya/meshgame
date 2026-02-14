@@ -171,6 +171,14 @@ export class ManualWebRtcTransport implements Transport {
     if (!slot) {
       throw new TransportNotStartedError();
     }
+
+    if (slot.pc.signalingState !== "have-local-offer") {
+      console.warn(
+        `[transport] Ignoring answer for ${peerId} in signalingState: ${slot.pc.signalingState}`,
+      );
+      return;
+    }
+
     const answerDesc = this.decodeSdp(answer);
     await slot.pc.setRemoteDescription(answerDesc);
   }
