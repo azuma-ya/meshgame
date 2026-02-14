@@ -47,7 +47,13 @@ export function useGameLogic() {
       { db, ref, set, push, remove, onValue, onChildAdded, onDisconnect },
       "farming-game-room-v2",
     );
-    const transport = new SignaledMeshWebRtcTransport({ self: id }, signaling);
+    const transport = new SignaledMeshWebRtcTransport(
+      {
+        self: id,
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      },
+      signaling,
+    );
 
     const memberInfo = {
       peerId: id,
