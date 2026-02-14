@@ -47,7 +47,7 @@ export const TileCell = memo<TileCellProps>(
     return (
       <button
         className={cn(
-          "relative size-full flex items-center justify-center cursor-pointer transition-all duration-200 aspect-square border-foreground/40 border group",
+          "relative size-full flex items-center justify-center cursor-pointer transition-all duration-200 aspect-square group border border-foreground/40",
           `tile-${tile.type.toLowerCase()}`,
           isSelected
             ? "ring-6 ring-background ring-inset z-10 shadow-sm"
