@@ -269,7 +269,12 @@ export class LockstepOrdering implements Ordering {
     switch (nodeMsg.type) {
       case "ACTION_PROPOSE": {
         if (nodeMsg.peerId !== fromPeerId) return;
-        if (nodeMsg.tick <= this.committedTick) return;
+        if (nodeMsg.tick <= this.committedTick) {
+          console.warn(
+            `[ordering] Discarding late action for tick ${nodeMsg.tick} (committed: ${this.committedTick}) from ${nodeMsg.peerId}`,
+          );
+          return;
+        }
 
         this.putAction(nodeMsg.tick, nodeMsg.peerId, nodeMsg.seq, {
           peerId: nodeMsg.peerId,
@@ -330,9 +335,12 @@ export class LockstepOrdering implements Ordering {
     // If you already manage membership elsewhere, you can remove these lines.
     if (ev.type === "peer_connected") {
       const currentTick = this.computeTick(Date.now());
-      this.peerFirstTick.set(ev.peerId, currentTick);
+      // Give a small window (5 ticks) for the newcomer to sync and send their first actions.
+      // Ticks before this 'effectiveTick' will not wait for this peer's seal.
+      const effectiveTick = currentTick + 5;
+      this.peerFirstTick.set(ev.peerId, effectiveTick);
       console.log(
-        `[ordering] Peer connected: ${ev.peerId} at tick ${currentTick}`,
+        `[ordering] Peer connected: ${ev.peerId}. Effective from tick ${effectiveTick} (now ${currentTick})`,
       );
 
       if (!this.membership.getPeer(ev.peerId)) {

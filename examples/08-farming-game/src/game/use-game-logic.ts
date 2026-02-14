@@ -94,7 +94,7 @@ export function useGameLogic() {
         console.log(
           `[game] Peer connected: ${ev.peerId}. Scheduling JOIN re-announcement...`,
         );
-        // Wait 1 second for clock sync to finish and connection stability before announcing
+        // Wait 2 seconds for clock sync to finish and connection stability before announcing
         setTimeout(() => {
           if (!nodeRef.current) return;
           console.log(`[game] Re-announcing JOIN for ${id}`);
@@ -104,7 +104,7 @@ export function useGameLogic() {
             name: id,
             color: userColorRef.current,
           });
-        }, 1000);
+        }, 2000);
       }
     });
 
