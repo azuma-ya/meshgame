@@ -52,16 +52,20 @@ export class GrowthScheduler implements Scheduler<GameState> {
   }
 
   private applyGrowthForTicks(state: GameState, dt: number): GameState {
-    // 破壊的変更を避けたいなら deep copy 方針に寄せてください
-    // ここでは最小例として「必要箇所だけコピー」する
-    const grid: TileState[][] = state.grid.map((row) =>
-      row.map((t) => ({ ...t, crop: t.crop ? { ...t.crop } : undefined })),
-    );
+    let gridChanged = false;
+    const newGrid: TileState[][] = [];
 
-    for (let y = 0; y < grid.length; y++) {
-      for (let x = 0; x < grid[y].length; x++) {
-        const tile = grid[y][x];
-        if (!tile.crop || tile.crop.stage === "MATURE") continue;
+    for (let y = 0; y < state.grid.length; y++) {
+      const row = state.grid[y];
+      let rowChanged = false;
+      const newRow: TileState[] = [];
+
+      for (let x = 0; x < row.length; x++) {
+        const tile = row[x];
+        if (!tile.crop || tile.crop.stage === "MATURE") {
+          newRow.push(tile);
+          continue;
+        }
 
         const crop = tile.crop;
         const config = SEED_CONFIG[crop.type];
@@ -70,12 +74,17 @@ export class GrowthScheduler implements Scheduler<GameState> {
         if (state.weather === "RAINY") speed *= 1.5;
         if (state.weather === "STORM") speed *= 0.5;
 
-        if (this.hasWaterAdj(grid, x, y)) speed /= WATER_ADJACENCY_BOOST;
+        // Note: hasWaterAdj uses state.grid to avoid issues with partial updates during the loop
+        if (this.hasWaterAdj(state.grid, x, y)) speed /= WATER_ADJACENCY_BOOST;
         if (crop.fertilized) speed /= FERTILIZER_CONFIG.growthBoost;
 
-        // ★ TICK_MS ではなく「ordering tick 何回分進んだか(dt)」で増やす
-        // growthTicks が “ordering tick” 単位で設計されている前提
-        crop.growthTimePoints += speed * dt;
+        const additionalGrowth = speed * dt;
+        if (additionalGrowth <= 0) {
+          newRow.push(tile);
+          continue;
+        }
+
+        const newGrowthTimePoints = crop.growthTimePoints + additionalGrowth;
 
         const [t0, t1, t2] = [
           config.growthTicks[0],
@@ -83,13 +92,31 @@ export class GrowthScheduler implements Scheduler<GameState> {
           config.growthTicks[0] + config.growthTicks[1] + config.growthTicks[2],
         ];
 
-        if (crop.growthTimePoints >= t2) crop.stage = "MATURE";
-        else if (crop.growthTimePoints >= t1) crop.stage = "GROWING";
-        else if (crop.growthTimePoints >= t0) crop.stage = "SPROUT";
+        let newStage = crop.stage;
+        if (newGrowthTimePoints >= t2) newStage = "MATURE";
+        else if (newGrowthTimePoints >= t1) newStage = "GROWING";
+        else if (newGrowthTimePoints >= t0) newStage = "SPROUT";
+
+        // Even if stage hasn't changed, growthTimePoints has.
+        // We always clone if it's growing.
+        const newCrop = {
+          ...crop,
+          growthTimePoints: newGrowthTimePoints,
+          stage: newStage,
+        };
+        newRow.push({ ...tile, crop: newCrop });
+        rowChanged = true;
+      }
+
+      if (rowChanged) {
+        newGrid.push(newRow);
+        gridChanged = true;
+      } else {
+        newGrid.push(row);
       }
     }
 
-    return { ...state, grid };
+    return gridChanged ? { ...state, grid: newGrid } : state;
   }
 
   private hasWaterAdj(grid: TileState[][], x: number, y: number): boolean {

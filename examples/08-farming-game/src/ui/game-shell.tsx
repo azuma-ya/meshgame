@@ -249,7 +249,7 @@ export const GameShell: React.FC<GameShellProps> = ({
           />
         </div>
 
-        <div className="flex-1 bg-muted/20 flex items-center justify-center p-4 sm:p-8 overflow-auto">
+        <div className="flex-1 bg-muted/20 flex items-center justify-center p-4 sm:p-8 pb-24 lg:pb-8 overflow-auto safe-area-bottom">
           {view.status === "LOBBY" ? (
             <div className="max-w-md w-full bg-card border border-border rounded-lg p-8 shadow-sm space-y-6">
               <div className="space-y-2 text-center">

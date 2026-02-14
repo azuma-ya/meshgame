@@ -154,6 +154,7 @@
 
 .pulse-glow {
   animation: pulse-glow 1.5s infinite ease-in-out;
+  will-change: transform, filter;
 }
 
 @keyframes pulse-glow {
