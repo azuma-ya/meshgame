@@ -39,4 +39,14 @@ export interface Ordering {
    * Advance time and generate outputs.
    */
   tick(nowMs: number): void;
+
+  /**
+   * Get current tick.
+   */
+  getTick(): number;
+
+  /**
+   * Get committed tick.
+   */
+  getCommittedTick(): number;
 }

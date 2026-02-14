@@ -10,17 +10,18 @@ export interface SignedAction {
 
 /**
  * A committed block of actions for a specific tick.
+ * NOTE: Lockstep needs "multiple actions per tick", so this is a block.
  */
 export interface Commit {
   /** Log sequence number (height). 1-based. */
   seq: number;
-  /** The action that was committed. */
-  action: SignedAction;
+  /** Actions committed for the tick, deterministically ordered. */
+  actions: SignedAction[];
   /** Previous hash for chain verification (optional). */
   prevHash?: string;
-  /** Optional metadata for internal use (e.g. tick number). */
-  metadata?: {
-    tick?: number;
+  /** Metadata for internal use (e.g. ordering tick number). */
+  metadata: {
+    orderingTick: number;
   };
 }
 

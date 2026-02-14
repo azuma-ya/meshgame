@@ -29,6 +29,7 @@ export type NodeMessage =
   | WelcomeMessage
   | JoinMessage
   | ActionProposeMessage
+  | ActionSealMessage
   | ActionCommitMessage
   | PingMessage
   | PongMessage;
@@ -68,6 +69,16 @@ export interface ActionProposeMessage {
   tick: number;
   /** App-specific payload. */
   payload: unknown;
+
+  seq: number;
+}
+
+export interface ActionSealMessage {
+  type: "ACTION_SEAL";
+  roomId: string;
+  peerId: string;
+  tick: number;
+  lastSeq: number; // -1 allowed
 }
 
 /**
@@ -81,10 +92,14 @@ export interface ActionCommitMessage {
   tick: number;
   /** The log height (sequence number). */
   height: number;
-  /** Ordered list of actions from all peers for this tick. */
-  actionsByPeer: Array<{
+  /**
+   * Ordered list of actions for this tick.
+   * This supports multiple actions per peer via (peerId, seq).
+   */
+  actions: Array<{
     peerId: string;
-    payload: unknown | null; // null represents NOOP (missing/timeout)
+    seq: number;
+    payload: unknown;
   }>;
 }
 

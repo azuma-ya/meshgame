@@ -1,3 +1,4 @@
+import type { Scheduler } from "./scheduler.js";
 import type { Meta, Result, State } from "./types.js";
 
 /**
@@ -26,6 +27,8 @@ export interface EngineFacade<S = State, A = unknown, O = unknown>
    * Handles fog of war, hidden information (cards), etc.
    */
   observe: (state: S, playerId: string) => O;
+
+  schedulers?: Scheduler<S>[];
 
   /**
    * Optional: Serialize state for snapshots/sync.

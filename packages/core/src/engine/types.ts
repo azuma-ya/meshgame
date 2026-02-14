@@ -16,10 +16,13 @@ export const err = <E>(error: E): Result<never, E> => ({ ok: false, error });
 export interface Meta {
   /** The ID of the actor (player or system) that initiated the action. */
   from: string;
-  /** The logical time step (tick) when this action is applied. */
-  tick: number;
+
+  // ordering用
+  /** The logical time step (orderingTick) when this action is applied. */
+  orderingTick: number;
   /** The block height or sequence number for ordering. */
   height?: number;
+
   /** Timestamp (wall clock) - optional and often for display only in deterministic engines. */
   timestamp?: number;
 }
@@ -40,8 +43,4 @@ export interface Action<P = unknown> {
  * Base interface for the Game State.
  * The State must be serializable and contain all "truth" of the game.
  */
-export interface State {
-  /** Current logical time step. */
-  tick: number;
-  [key: string]: unknown;
-}
+export interface State {}

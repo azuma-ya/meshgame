@@ -55,7 +55,7 @@ class CounterEngine extends BaseEngine<CounterState, IncAction> {
   protected view = { observe: (s: CounterState) => s };
 
   constructor() {
-    super({ tick: 0, count: 0 });
+    super({ count: 0 });
   }
 
   decodeAction(payload: unknown): IncAction {
@@ -67,7 +67,7 @@ describe("BaseEngine Architecture", () => {
   it("should process actions and update state via Rule", () => {
     const engine = new CounterEngine();
     let state = engine.initialState;
-    const meta: Meta = { from: "tester", tick: 1 };
+    const meta: Meta = { from: "tester", orderingTick: 1 };
 
     state = engine.reduce(state, { type: "INC", payload: 1 }, meta);
     expect(state.count).toBe(1);
@@ -81,7 +81,7 @@ describe("BaseEngine Architecture", () => {
     engine.addSystem(new DoublerSystem());
 
     let state = engine.initialState;
-    const meta: Meta = { from: "tester", tick: 1 };
+    const meta: Meta = { from: "tester", orderingTick: 1 };
 
     // Reach 9
     state = engine.reduce(state, { type: "INC", payload: 9 }, meta);
@@ -94,8 +94,8 @@ describe("BaseEngine Architecture", () => {
 
   it("should respect isLegal validation", () => {
     const engine = new CounterEngine();
-    const state: CounterState = { tick: 0, count: 100 };
-    const meta: Meta = { from: "tester", tick: 1 };
+    const state: CounterState = { count: 100 };
+    const meta: Meta = { from: "tester", orderingTick: 1 };
 
     const result = engine.isLegal(state, { type: "INC", payload: 1 }, meta);
     expect(result.ok).toBe(false);

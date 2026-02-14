@@ -1,7 +1,15 @@
 import type { ActionLog, Commit } from "./types.js";
 
+type MemoryLogStoreOptions = {
+  output: boolean;
+};
+
 export class MemoryLogStore implements ActionLog {
   private commits: Commit[] = [];
+
+  constructor(
+    private readonly opts: MemoryLogStoreOptions = { output: false },
+  ) {}
 
   async append(commit: Commit): Promise<void> {
     const expectedSeq = (await this.latestHeight()) + 1;
@@ -11,6 +19,9 @@ export class MemoryLogStore implements ActionLog {
       );
     }
     this.commits.push(commit);
+    if (this.opts.output) {
+      console.log("[MemoryLogStore] Appended commit:", commit);
+    }
   }
 
   async getRange(fromHeight: number, toHeight: number): Promise<Commit[]> {
@@ -29,5 +40,8 @@ export class MemoryLogStore implements ActionLog {
 
   async clear(): Promise<void> {
     this.commits = [];
+    if (this.opts.output) {
+      console.log("[MemoryLogStore] Cleared commits");
+    }
   }
 }

@@ -1,5 +1,6 @@
 import type { EngineFacade } from "./adapter.js";
 import type { Rule } from "./rule.js";
+import type { Scheduler } from "./scheduler.js";
 import type { System } from "./system.js";
 import type { Action, Meta, Result, State } from "./types.js";
 import type { View } from "./view.js";
@@ -21,6 +22,7 @@ export abstract class BaseEngine<
   protected abstract rule: Rule<S, A>;
   protected abstract view: View<S, O>;
   protected systems: System<S>[] = [];
+  schedulers: Scheduler<S>[] = [];
 
   constructor(public readonly initialState: S) {}
 
@@ -30,6 +32,14 @@ export abstract class BaseEngine<
    */
   addSystem(system: System<S>): void {
     this.systems.push(system);
+  }
+
+  /**
+   * Registers a scheduler into the pipeline.
+   * Schedulers are executed in order during `tick` updates.
+   */
+  addScheduler(scheduler: Scheduler<S>): void {
+    this.schedulers.push(scheduler);
   }
 
   /**
@@ -45,10 +55,6 @@ export abstract class BaseEngine<
       // In a deterministic engine, invalid actions *should* be rejected before this point
       // or handled gracefully. Since reduce must be safe, we log and ignore (or throw generic error).
       // Ideally, the Node checks isLegal before calling reduce.
-      console.warn(
-        `[BaseEngine] Invalid action skipped: ${result.error}`,
-        action,
-      );
       return state;
     }
 
