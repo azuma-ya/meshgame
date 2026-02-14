@@ -164,12 +164,21 @@
 }
 
 /* Map specific vividness adjustments */
-.tile-soil, .tile-grass, .tile-farmland, .tile-water {
+/* .tile-soil, .tile-grass, .tile-farmland, .tile-water {
   @apply shadow-inner;
-}
+} */
 
 .animate-subtle-bounce {
   animation: subtle-bounce 1s infinite;
+}
+
+/* Utilities */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.min-h-dvh {
+  min-height: 100dvh;
 }
 
 @keyframes subtle-bounce {
