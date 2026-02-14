@@ -295,15 +295,28 @@ export class LockstepOrdering implements Ordering {
         const localTick = this.computeTick(Date.now());
         if (nodeMsg.tick > localTick) {
           console.log(
-            `[ordering] Clock skew detected! Remote is ahead: ${nodeMsg.tick} (local: ${localTick}). Warping local clock.`,
+            `[ordering] Clock skew! Warping forward: ${localTick} -> ${nodeMsg.tick}.`,
           );
-          // Adjust t0Ms so that computeTick(now) returns nodeMsg.tick
-          // nodeMsg.tick = floor((nowMs - t0Ms) / tickMs)
-          // -> t0Ms = nowMs - (nodeMsg.tick * tickMs)
           const nowMs = Date.now();
           this.config.t0Ms = nowMs - nodeMsg.tick * this.config.tickMs;
-          // Trigger a tick update immediately with new t0
-          this.tick(nowMs);
+
+          // Before moving currentTick, seal the "old" future ticks if necessary
+          // so we don't leave gaps in the seals we promised to send.
+          const oldNewestSeal =
+            this.currentTick - 1 + this.config.inputDelayTicks;
+
+          // Perform warp
+          this.currentTick = nodeMsg.tick;
+
+          // Seal everything from oldNewestSeal up to the new perspective
+          const newNewestSeal =
+            this.currentTick - 1 + this.config.inputDelayTicks;
+          for (let s = oldNewestSeal; s <= newNewestSeal; s++) {
+            this.sealTickIfNeeded(s);
+          }
+
+          // Force a state check
+          this.tryCommitUpTo(this.maxCommittableTick());
         }
         return;
       }
@@ -317,9 +330,10 @@ export class LockstepOrdering implements Ordering {
     // If you already manage membership elsewhere, you can remove these lines.
     if (ev.type === "peer_connected") {
       const currentTick = this.computeTick(Date.now());
-      // Mark the first tick this peer is effective for.
-      // They don't need to seal earlier ticks.
       this.peerFirstTick.set(ev.peerId, currentTick);
+      console.log(
+        `[ordering] Peer connected: ${ev.peerId} at tick ${currentTick}`,
+      );
 
       if (!this.membership.getPeer(ev.peerId)) {
         this.membership.addPeer({
@@ -328,16 +342,17 @@ export class LockstepOrdering implements Ordering {
           joinedAt: Date.now(),
         });
       }
-      // Send current tick to the new peer to help them sync.
-      // Small delay to ensure the DataChannel is fully ready for sending.
+
+      // Send the captured tick immediately to ensure consistency.
+      const syncMsg: NodeMessage = {
+        type: "SYNC_CLOCK",
+        roomId: this.config.roomId,
+        peerId: this.transport.self,
+        tick: currentTick,
+      };
+
+      // Slight delay for DataChannel stability, but use the captured 'currentTick'.
       setTimeout(() => {
-        const currentTick = this.computeTick(Date.now());
-        const syncMsg: NodeMessage = {
-          type: "SYNC_CLOCK",
-          roomId: this.config.roomId,
-          peerId: this.transport.self,
-          tick: currentTick,
-        };
         this.transport.send(ev.peerId, {
           topic: NODE_TOPIC,
           payload: encodeMessage(syncMsg),
@@ -358,12 +373,36 @@ export class LockstepOrdering implements Ordering {
   }
 
   private tryCommitUpTo(maxTickToCommit: number): void {
-    // Commit in order: committedTick+1, committedTick+2, ...
     for (let t = this.committedTick + 1; t <= maxTickToCommit; t++) {
-      if (!this.canCommitTick(t)) break; // stop at first missing barrier (lockstep)
+      if (!this.canCommitTick(t)) {
+        // Diagnostic: Log occasionally if we are stuck
+        if (t % 100 === 0 || t === this.committedTick + 1) {
+          const missing = this.getMissingSeals(t);
+          if (missing.length > 0) {
+            console.debug(
+              `[ordering] Waiting for seals for tick ${t} from: ${missing.join(", ")}`,
+            );
+          }
+        }
+        break;
+      }
       this.commitTick(t);
       this.committedTick = t;
     }
+  }
+
+  private getMissingSeals(tick: number): string[] {
+    const peers = this.getPeers();
+    if (!peers.includes(this.transport.self)) peers.push(this.transport.self);
+    const byAuthor = this.seals.get(tick);
+    const result: string[] = [];
+    for (const p of peers) {
+      const first = this.peerFirstTick.get(p) ?? 0;
+      if (tick >= first && (!byAuthor || !byAuthor.has(p))) {
+        result.push(p);
+      }
+    }
+    return result;
   }
 
   /**
