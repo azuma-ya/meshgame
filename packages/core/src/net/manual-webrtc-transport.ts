@@ -19,6 +19,8 @@ export interface ManualWebRtcTransportOptions {
   self: string;
   /** Timeout for ICE gathering in ms. Default: 10 000. */
   iceGatheringTimeoutMs?: number;
+  /** Custom ICE servers (STUN/TURN). */
+  iceServers?: RTCIceServer[];
 }
 
 /** Internal state for a single peer connection. */
@@ -41,6 +43,7 @@ export class ManualWebRtcTransport implements Transport {
   readonly self: string;
 
   protected readonly iceTimeoutMs: number;
+  protected readonly iceServers: RTCIceServer[];
   protected readonly peers: Map<string, PeerSlot> = new Map();
 
   protected messageHandlers: MessageHandler[] = [];
@@ -51,6 +54,7 @@ export class ManualWebRtcTransport implements Transport {
   constructor(opts: ManualWebRtcTransportOptions) {
     this.self = opts.self;
     this.iceTimeoutMs = opts.iceGatheringTimeoutMs ?? DEFAULT_ICE_TIMEOUT_MS;
+    this.iceServers = opts.iceServers ?? [];
   }
 
   // ---- Transport interface ----
@@ -195,7 +199,9 @@ export class ManualWebRtcTransport implements Transport {
   }
 
   protected createPeerConnection(_peerId: string): RTCPeerConnection {
-    const pc = new RTCPeerConnection();
+    const pc = new RTCPeerConnection({
+      iceServers: this.iceServers,
+    });
 
     pc.onconnectionstatechange = () => {
       console.log(`[transport] connectionState: ${pc.connectionState}`);
