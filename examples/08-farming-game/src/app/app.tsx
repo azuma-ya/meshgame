@@ -13,8 +13,8 @@ export default function App() {
     sendAction,
   } = useGameLogic();
 
-  const handleStart = (name: string, wsUrl: string, color: string) => {
-    connect(name, wsUrl, color);
+  const handleStart = (name: string, color: string) => {
+    connect(name, color);
   };
 
   if (!isConnected) {

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "pnpm run dev:server & vite",
+    "dev": "vite",
     "dev:server": "node server.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
@@ -13,6 +13,7 @@
   "dependencies": {
     "@nodegame/core": "workspace:^",
     "clsx": "^2.1.1",
+    "firebase": "^11.8.1",
     "lucide-react": "^0.475.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

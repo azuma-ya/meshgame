@@ -69,7 +69,7 @@ export interface PlayerView extends GameState {}
 
 export const GRID_SIZE = 10;
 export const TICK_MS = 50;
-export const ORDERING_TICK_MS = 2000;
+export const ORDERING_TICK_MS = 1000;
 export const BASE_TICK_MS = 1000;
 
 export const SEED_CONFIG: Record<

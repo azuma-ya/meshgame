@@ -9,7 +9,11 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
-import type { GameAction, GameState } from "../game/types";
+import {
+  type GameAction,
+  type GameState,
+  ORDERING_TICK_MS,
+} from "../game/types";
 import { cn } from "../lib/utils";
 import { Board } from "./board";
 import { PlayerSidebar } from "./player-sidebar";
@@ -267,7 +271,7 @@ export const GameShell: React.FC<GameShellProps> = ({
               <div className="rounded-md bg-muted p-4 font-mono text-xs text-muted-foreground space-y-1">
                 <p># プロトコル: NODECORE_FARMING_V2</p>
                 <p># 参加人数: {Object.keys(view.players).length}</p>
-                <p># 更新間隔: {50}ms</p>
+                <p># 通信間隔: {ORDERING_TICK_MS}ms</p>
               </div>
 
               <button

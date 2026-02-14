@@ -1,12 +1,23 @@
 import {
   BasicMembership,
+  FirebaseSignalingClient,
   GameNode,
   LockstepOrdering,
   MemoryLogStore,
   SignaledMeshWebRtcTransport,
   WebSocketSignalingClient,
 } from "@nodegame/core";
+import {
+  onChildAdded,
+  onDisconnect,
+  onValue,
+  push,
+  ref,
+  remove,
+  set,
+} from "firebase/database";
 import { useCallback, useRef, useState } from "react";
+import { db } from "../lib/firebase";
 import { farmingEngine } from "./engine";
 import type { GameAction, GameState, PlayerView } from "./types";
 import { ORDERING_TICK_MS, TICK_MS } from "./types";
@@ -24,12 +35,16 @@ export function useGameLogic() {
   const nodeRef = useRef<GameNode<GameState, GameAction, PlayerView>>(null);
   const userColorRef = useRef("");
 
-  const connect = async (id: string, wsUrl: string, color: string) => {
-    if (!id || !wsUrl) return;
+  const connect = async (id: string, color: string) => {
+    if (!id) return;
     setSelfId(id);
     userColorRef.current = color;
 
-    const signaling = new WebSocketSignalingClient(wsUrl);
+    // const signaling = new WebSocketSignalingClient(wsUrl);
+    const signaling = new FirebaseSignalingClient(
+      { db, ref, set, push, remove, onValue, onChildAdded, onDisconnect },
+      "farming-game-room-v2",
+    );
     const transport = new SignaledMeshWebRtcTransport({ self: id }, signaling);
 
     const memberInfo = {
