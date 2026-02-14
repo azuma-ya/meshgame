@@ -7,13 +7,10 @@ import {
   type Rule,
   type Schedule,
   type Scheduler,
-  type System,
   type View,
 } from "@nodegame/core";
-import { msToSec } from "../lib/utils";
 import { createRNG } from "./rng";
 import {
-  BASE_TICK_MS,
   FERTILIZER_CONFIG,
   type GameAction,
   type GameState,
@@ -22,7 +19,6 @@ import {
   type PlayerView,
   SEED_CONFIG,
   type SeedType,
-  TICK_MS,
   type TileState,
   type TileType,
   WATER_ADJACENCY_BOOST,
@@ -117,7 +113,7 @@ export class GrowthScheduler implements Scheduler<GameState> {
 class SubsidyScheduler implements Scheduler<GameState> {
   id = "subsidy";
 
-  schedule(state: GameState): Schedule<GameState> | null {
+  schedule(_state: GameState): Schedule<GameState> | null {
     return {
       kind: "every",
       everyTicks: 1,
@@ -150,7 +146,7 @@ class SubsidyScheduler implements Scheduler<GameState> {
 class WeatherScheduler implements Scheduler<GameState> {
   id = "weather";
 
-  schedule(state: GameState): Schedule<GameState> | null {
+  schedule(_state: GameState): Schedule<GameState> | null {
     return {
       kind: "every",
       everyTicks: Math.floor(10 / (ORDERING_TICK_MS / 1000)),
@@ -260,9 +256,6 @@ class FarmingRule implements Rule<GameState, GameAction> {
         if (tile.type !== "FARMLAND")
           return err("Must be on farmland to plant");
         if (tile.crop) return err("Tile already has a crop");
-        const seed = player.inventory.find(
-          (i) => i.type === action.seedType && i.category === "SEED",
-        );
         if (action.useFertilizer) {
           const fert = player.inventory.find((i) => i.type === "FERTILIZER");
           if (!fert || fert.count <= 0) return err("No fertilizer left");

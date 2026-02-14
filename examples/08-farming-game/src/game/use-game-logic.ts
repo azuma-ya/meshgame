@@ -4,8 +4,8 @@ import {
   GameNode,
   LockstepOrdering,
   MemoryLogStore,
+  type PeerEvent,
   SignaledMeshWebRtcTransport,
-  WebSocketSignalingClient,
 } from "@nodegame/core";
 import {
   onChildAdded,
@@ -30,7 +30,9 @@ export function useGameLogic() {
   const [selfId, setSelfId] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [view, setView] = useState<PlayerView>(farmingEngine.initialState);
+  const [view, setView] = useState<PlayerView>(
+    farmingEngine.initialState as PlayerView,
+  );
 
   const nodeRef = useRef<GameNode<GameState, GameAction, PlayerView>>(null);
   const userColorRef = useRef("");
@@ -77,11 +79,11 @@ export function useGameLogic() {
     );
     nodeRef.current = node;
 
-    node.subscribe((v) => {
+    node.subscribe((v: PlayerView) => {
       setView(v);
     });
 
-    node.onPeerEvent((ev) => {
+    node.onPeerEvent((ev: PeerEvent) => {
       if (ev.type === "peer_connected") {
         // Re-announce JOIN so the new peer knows about us
         node.submit({

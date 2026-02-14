@@ -1,12 +1,4 @@
-import {
-  Activity,
-  Clock,
-  FlaskConical,
-  Menu,
-  Play,
-  ShoppingBag,
-  Wallet,
-} from "lucide-react";
+import { Activity, Clock, Menu, Play, ShoppingBag, Wallet } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
 import {
